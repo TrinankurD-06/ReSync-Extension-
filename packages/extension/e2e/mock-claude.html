@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Pricing chat - Claude</title>
+<style>
+  body { font-family: system-ui; display: flex; margin: 0; }
+  nav { width: 200px; padding: 8px; border-right: 1px solid #ddd; }
+  nav a { display: block; padding: 4px; }
+  #app { flex: 1; padding: 12px; }
+  .ProseMirror { border: 1px solid #999; min-height: 40px; padding: 6px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<!-- A stand-in for claude.ai used by the end-to-end test. It mimics the parts ReSync's selectors rely on:
+     sidebar links, a ProseMirror-like editor that handles paste, a send button, and replies that stream
+     (stop button visible) before they render as HTML. -->
+<nav>
+  <a href="/project/p1">Launch site</a>
+  <a href="/chat/c1">Pricing chat</a>
+  <a href="/chat/c2">Hiring plan</a>
+</nav>
+<div id="app">
+  <header><a href="/project/p1">Launch site</a></header>
+  <main id="thread"></main>
+  <fieldset>
+    <div contenteditable="true" class="ProseMirror" role="textbox"></div>
+    <button aria-label="Send message" type="button">Send</button>
+  </fieldset>
+</div>
+<script>
+  const editor = document.querySelector('.ProseMirror');
+  const thread = document.getElementById('thread');
+  window.sentMessages = [];
+
+  // Like ProseMirror: take pasted plain text, replacing the selection if it covers everything.
+  editor.addEventListener('paste', (e) => {
+    e.preventDefault();
+    const text = e.clipboardData.getData('text/plain');
+    const sel = window.getSelection();
+    if (sel && sel.toString().length && sel.toString().length >= editor.innerText.trim().length) editor.innerHTML = '';
+    for (const line of text.split('\n')) {
+      const p = document.createElement('p');
+      p.textContent = line;
+      editor.appendChild(p);
+    }
+    editor.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  });
+  editor.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      send();
+    }
+  });
+  document.querySelector('button[aria-label="Send message"]').addEventListener('click', send);
+
+  const SECTIONS = ['Goal', 'Current state', 'Decisions made (and why)', 'Open questions', 'Dead ends', 'Next 3 steps', 'Key files'];
+  function replyFor(text) {
+    if (text.includes('Context Passport')) {
+      return SECTIONS.map((s) => `<h2>${s}</h2><p>${s} for the pricing page.</p>`).join('');
+    }
+    if (text.includes('topic tree')) {
+      const tree = { topic: 'Pricing chat', turnRange: [1, 4], children: [{ topic: 'Plans', turnRange: [1, 2], children: [] }, { topic: 'Discounts', turnRange: [3, 4], children: [] }] };
+      return `<p>Here is the tree:</p><pre><code class="language-json">${JSON.stringify(tree)}</code></pre>`;
+    }
+    if (text.includes('Summarise')) {
+      return '<ul>' + ['We priced three plans.', 'Pro is 20 dollars.', 'Teams get a discount.', 'Annual billing saves 15%.', 'Next: write the pricing page.', 'Open: a free tier?'].map((l) => `<li>${l}</li>`).join('') + '</ul>';
+    }
+    return `<p>Reply to: ${text.slice(0, 40).replace(/</g, '&lt;')}</p>`;
+  }
+
+  function send() {
+    const text = editor.innerText.trim();
+    if (!text) return;
+    window.sentMessages.push(text);
+    editor.innerHTML = '';
+    const u = document.createElement('div');
+    u.dataset.testid = 'user-message';
+    u.textContent = text;
+    thread.appendChild(u);
+    const a = document.createElement('div');
+    a.className = 'font-claude-response';
+    a.dataset.isStreaming = 'true';
+    a.textContent = '...';
+    thread.appendChild(a);
+    const stop = document.createElement('button');
+    stop.setAttribute('aria-label', 'Stop response');
+    document.querySelector('fieldset').appendChild(stop);
+    setTimeout(() => {
+      a.innerHTML = replyFor(text);
+      a.dataset.isStreaming = 'false';
+      stop.remove();
+    }, 800);
+  }
+</script>
+</body>
+</html>
