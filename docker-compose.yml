@@ -1,0 +1,43 @@
+# Self-host ReSync: MongoDB + the ReSync server (which also serves the dashboard).
+#   docker compose up --build        then open http://localhost:8787
+#
+# Out of the box this is a LOCAL TRIAL: it listens on 127.0.0.1 only and uses development sign-in (no OAuth app
+# needed). To run it for a team, follow docs/SELF_HOSTING.md: set NODE_ENV=production, a real SESSION_SECRET,
+# GitHub or Google OAuth credentials, and your public URL in a .env file next to this one.
+services:
+  mongo:
+    image: mongo:8
+    restart: unless-stopped
+    volumes:
+      - resync-mongo:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  resync:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - "${RESYNC_BIND:-127.0.0.1}:${RESYNC_PORT:-8787}:8787"
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      MONGODB_URI: mongodb://mongo:27017/resync
+      PUBLIC_SERVER_URL: ${PUBLIC_SERVER_URL:-http://localhost:8787}
+      DASHBOARD_URL: ${DASHBOARD_URL:-http://localhost:8787}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      SESSION_SECRET: ${SESSION_SECRET:-local-trial-only-change-me}
+      ALLOW_DEV_LOGIN: ${ALLOW_DEV_LOGIN:-true}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+
+volumes:
+  resync-mongo:

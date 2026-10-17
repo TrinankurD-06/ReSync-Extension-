@@ -1,0 +1,35 @@
+{
+  "name": "resync",
+  "private": true,
+  "version": "0.1.0",
+  "description": "ReSync: saved prompts, Context Passport, usage tracking and a limit-aware work queue for Claude Code and claude.ai, with bring-your-own AI providers.",
+  "license": "MIT",
+  "type": "module",
+  "workspaces": [
+    "packages/shared",
+    "packages/cli",
+    "packages/plugin",
+    "packages/server",
+    "packages/extension",
+    "packages/dashboard"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "build": "npm run build --workspaces --if-present",
+    "build:extension": "npm run build -w @resync/extension",
+    "test:e2e": "npm run test:e2e -w @resync/dashboard && npm run test:e2e -w @resync/extension",
+    "test:ollama": "node -e \"process.env.RESYNC_E2E_OLLAMA='1'; require('child_process').execSync('npx vitest run packages/cli/test/ollama.e2e.test.js --maxWorkers=1', { stdio: 'inherit', env: process.env })\""
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.64.1",
+    "eslint": "^10.13.0",
+    "globals": "^17.13.0",
+    "vitest": "^5.0.5"
+  }
+}
