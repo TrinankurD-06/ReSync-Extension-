@@ -1,0 +1,8 @@
+{
+  "name": "resync",
+  "version": "0.1.0",
+  "description": "Saved prompts as slash commands, Context Passport, topic tree, summaries and usage tracking. Works with no API keys (in-chat mode).",
+  "author": { "name": "ReSync contributors" },
+  "license": "MIT",
+  "keywords": ["prompts", "handoff", "passport", "usage", "queue"]
+}

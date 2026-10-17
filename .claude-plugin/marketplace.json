@@ -1,0 +1,12 @@
+{
+  "name": "resync-team",
+  "description": "ReSync for your team: install with /plugin marketplace add <this repo>, then /plugin install resync@resync-team",
+  "owner": { "name": "ReSync contributors" },
+  "plugins": [
+    {
+      "name": "resync",
+      "source": "./packages/plugin",
+      "description": "Saved prompts, Context Passport, topic tree, summaries and usage tracking for Claude Code."
+    }
+  ]
+}

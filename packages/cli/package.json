@@ -1,0 +1,17 @@
+{
+  "name": "@resync/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "resync: saved prompts, usage, Context Passport via API, and the Limit-Aware Work Queue.",
+  "bin": {
+    "resync": "bin/resync.js"
+  },
+  "main": "src/index.js",
+  "license": "MIT",
+  "dependencies": {
+    "@napi-rs/keyring": "^2.1.1",
+    "@resync/shared": "0.1.0",
+    "commander": "^15.0.0"
+  }
+}

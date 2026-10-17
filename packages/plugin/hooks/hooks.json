@@ -1,0 +1,27 @@
+{
+  "description": "ReSync: compaction marker + passport reminder, and usage records at session end. No AI calls.",
+  "hooks": {
+    "PreCompact": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/hook.mjs", "pre-compact"], "timeout": 10 }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "compact",
+        "hooks": [
+          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/hook.mjs", "session-start"], "timeout": 10 }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/hook.mjs", "session-end"] }
+        ]
+      }
+    ]
+  }
+}

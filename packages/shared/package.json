@@ -1,0 +1,25 @@
+{
+  "name": "@resync/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "ReSync shared core: prompt format, provider layer, token estimator, schemas, sync client.",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./prompts": "./src/prompts.js",
+    "./providers": "./src/providers/index.js",
+    "./tokens": "./src/tokens.js",
+    "./tree": "./src/tree.js",
+    "./usage": "./src/usage.js",
+    "./templates": "./src/templates.js",
+    "./sync": "./src/sync.js",
+    "./models": "./src/featureModels.js",
+    "./node/library": "./src/node/library.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "yaml": "^2.9.1",
+    "zod": "^4.6.7"
+  }
+}

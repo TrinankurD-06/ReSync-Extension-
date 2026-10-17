@@ -1,0 +1,8 @@
+{
+  "name": "@resync/plugin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "ReSync Claude Code plugin. Scripts are dependency-free: the installed plugin is copied on its own, without node_modules.",
+  "license": "MIT"
+}
