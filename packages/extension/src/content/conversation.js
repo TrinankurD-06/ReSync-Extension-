@@ -28,8 +28,10 @@ export function markdownOf(node) {
     const tag = el.tagName;
     if (tag === 'BUTTON' || tag === 'SVG' || el.getAttribute('aria-hidden') === 'true') return;
     if (tag === 'PRE') {
-      const lang = el.querySelector('code')?.className.match(/language-(\w+)/)?.[1] ?? '';
-      out.push(`\n\`\`\`${lang}\n${el.textContent.replace(/\n$/, '')}\n\`\`\`\n`);
+      // claude.ai puts a language label and a copy button in the code block: take only the <code> text.
+      const code = el.querySelector('code');
+      const lang = code?.className.match(/language-(\w+)/)?.[1] ?? '';
+      out.push(`\n\`\`\`${lang}\n${(code ?? el).textContent.replace(/\n$/, '')}\n\`\`\`\n`);
       return;
     }
     if (tag === 'BR') return void out.push('\n');

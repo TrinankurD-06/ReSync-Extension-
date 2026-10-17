@@ -20,7 +20,7 @@ export const SELECTORS = {
   stopButton: ['button[aria-label="Stop response"]', 'button[aria-label*="Stop" i]'],
   streamingIndicator: ['[data-is-streaming="true"]'],
   userMessage: ['[data-testid="user-message"]', '[data-message-author-role="user"]'],
-  assistantMessage: ['.font-claude-response', '.font-claude-message', '[data-message-author-role="assistant"]', '[data-is-streaming]'],
+  assistantMessage: ['[data-testid="assistant-message"]', '.font-claude-response', '.font-claude-message', '[data-message-author-role="assistant"]', '[data-is-streaming]'],
   sidebarProjectLink: ['nav a[href^="/project/"]', 'a[href^="/project/"]'],
   sidebarChatLink: ['nav a[href^="/chat/"]', 'a[href^="/chat/"]'],
   // The project the open chat belongs to (breadcrumb/header link), for per-project usage estimates.
@@ -84,6 +84,17 @@ export function queryAll(name, o = {}) {
     }
   }
   return [];
+}
+
+/**
+ * A stable identity for a message element. claude.ai renders long chats in a virtual list, so the same
+ * message can be removed and re-added as a new element; its turn key survives that, the element does not.
+ * @param {Element} el
+ * @returns {string | Element}
+ */
+export function messageKey(el) {
+  const keyed = el.closest?.('[data-turn-key]') ?? el.querySelector?.('[data-turn-key]');
+  return keyed?.getAttribute('data-turn-key') || el;
 }
 
 /** Is this a conversation page (/chat/<id> or /new)? @param {string} pathname */

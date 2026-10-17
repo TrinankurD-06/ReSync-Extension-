@@ -103,6 +103,39 @@ export function removeTrailing(el, trigger) {
 }
 
 /**
+ * Remove the last trigger (e.g. ";;") and anything typed after it on the same line, such as a search
+ * query that landed in the composer. In a rich-text editor the tail is selected and deleted through the
+ * editor (so its state stays in sync); otherwise the whole text is rewritten.
+ * @param {Element} el
+ * @param {string} trigger
+ * @returns {boolean} whether a trigger was found
+ */
+export function removeTrigger(el, trigger) {
+  const text = readText(el).replace(/\s+$/, '');
+  const at = text.lastIndexOf(trigger);
+  if (at < 0) return false;
+  const tail = text.slice(at);
+  if (/\n/.test(tail) || tail.length > 200) return false;
+  const kept = text.slice(0, at);
+  if (!isTextField(el)) {
+    const html = /** @type {HTMLElement} */ (el);
+    html.focus();
+    caretToEnd(html);
+    const sel = window.getSelection();
+    try {
+      if (sel && typeof sel.modify === 'function') {
+        for (let i = 0; i < tail.length; i++) sel.modify('extend', 'backward', 'character');
+        if (sel.toString() === tail && document.execCommand('delete') && readText(el).replace(/\s+$/, '') === kept.replace(/\s+$/, '')) return true;
+      }
+    } catch {
+      /* fall back to rewriting */
+    }
+  }
+  insertText(el, kept, { replace: true });
+  return true;
+}
+
+/**
  * Send the current message: click the send button, or press Enter in the composer.
  * @param {{ root?: ParentNode, overrides?: Record<string, string[]> }} [o]
  * @returns {boolean} whether a send was attempted

@@ -52,6 +52,7 @@ export default function ChainTab({ prompt }) {
           <div>
             {STATUS_TEXT[state.status] ?? state.status}
             {state.status === 'countdown' && <> : <strong>{state.countdown}s</strong></>}
+            {state.status === 'paused' && <>: step {Math.min(state.step + 1, state.total)} will not be sent until you press Resume{state.pausedFrom === 'countdown' && state.countdown ? ` (${state.countdown}s left on the timer)` : ''}</>}
             {state.paused && state.status !== 'paused' && running && <> (will pause before the next step)</>}
           </div>
           <div className="small">Step {Math.min(state.step + 1, state.total)} of {state.total} · sent {state.sent.length}{state.skipped.length ? ` · skipped ${state.skipped.length}` : ''}</div>

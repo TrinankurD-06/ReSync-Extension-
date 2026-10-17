@@ -2,7 +2,7 @@
 // filling {{variables}} in a small form. Plain DOM in a shadow root (no page styles leak in or out).
 import { renderVariables, promptText } from '@resync/shared/prompts';
 import { searchPrompts } from '../lib/library.js';
-import { insertText, readText, removeTrailing } from '../lib/composer.js';
+import { insertText, readText, removeTrigger } from '../lib/composer.js';
 
 export const TRIGGER = ';;';
 
@@ -11,6 +11,7 @@ const CSS = `
 .box { position: fixed; z-index: 2147483646; width: 360px; max-height: 340px; overflow: auto; background: #fff; color: #1c1c22;
   border: 1px solid #d0d0d8; border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,.18); font: 13px/1.4 system-ui, sans-serif; padding: 8px; }
 @media (prefers-color-scheme: dark) { .box { background: #212128; color: #ececf1; border-color: #3a3a44; } }
+input[aria-invalid="true"] { border-color: #dc2626; }
 input { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #c8c8d2; border-radius: 6px; font: inherit; background: transparent; color: inherit; }
 ul { list-style: none; margin: 6px 0 0; padding: 0; }
 li { padding: 6px 8px; border-radius: 6px; cursor: pointer; }
@@ -36,11 +37,74 @@ export function createPicker(o) {
   let root = null;
   let results = [];
   let index = 0;
+  /** The picker field that should have the keyboard (search box, then variable inputs). */
+  /** @type {HTMLInputElement | null} */
+  let field = null;
+  /** @type {(() => void) | null} */
+  let unguard = null;
 
   function close() {
+    unguard?.();
+    unguard = null;
     host?.remove();
     host = null;
     root = null;
+    field = null;
+  }
+
+  /** @param {HTMLInputElement} el */
+  function focusField(el) {
+    field = el;
+    el.focus();
+  }
+
+  /**
+   * claude.ai's editor can take the focus back, and the page listens for keys at document level. While the
+   * picker is open: (1) our own key and input events stop at the picker host so the page never sees them;
+   * (2) keys that still reach the message box are blocked there and replayed into the picker field, so
+   * nothing typed for the picker lands in (or sends) the message.
+   */
+  function guard() {
+    const stop = (e) => e.stopPropagation();
+    const kinds = ['keydown', 'keyup', 'keypress', 'beforeinput', 'input', 'paste', 'compositionstart', 'compositionend'];
+    for (const k of kinds) host.addEventListener(k, stop);
+    const inComposer = (e) => {
+      const c = o.getComposer();
+      return Boolean(c && e.target instanceof Node && (c === e.target || c.contains(e.target)));
+    };
+    const onKey = (e) => {
+      if (!field || !inComposer(e)) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (e.type !== 'keydown') return;
+      focusField(field);
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        field.value += e.key;
+        field.dispatchEvent(new Event('input'));
+      } else if (e.key === 'Backspace') {
+        field.value = field.value.slice(0, -1);
+        field.dispatchEvent(new Event('input'));
+      } else {
+        field.dispatchEvent(new KeyboardEvent('keydown', { key: e.key, cancelable: true }));
+      }
+    };
+    const onBeforeInput = (e) => {
+      if (field && inComposer(e)) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      }
+    };
+    doc.addEventListener('keydown', onKey, true);
+    doc.addEventListener('keypress', onKey, true);
+    doc.addEventListener('beforeinput', onBeforeInput, true);
+    // The editor may grab focus right after it handles the ";;" input: take it back once things settle.
+    const refocus = setTimeout(() => field && doc.activeElement !== host && focusField(field), 50);
+    return () => {
+      clearTimeout(refocus);
+      doc.removeEventListener('keydown', onKey, true);
+      doc.removeEventListener('keypress', onKey, true);
+      doc.removeEventListener('beforeinput', onBeforeInput, true);
+    };
   }
 
   function position(box) {
@@ -102,7 +166,8 @@ export function createPicker(o) {
       render();
     });
     render();
-    input.focus();
+    unguard = guard();
+    focusField(input);
   }
 
   /** @param {import('@resync/shared/prompts').Prompt} p */
@@ -128,17 +193,32 @@ export function createPicker(o) {
           if (i === needed.length - 1) submitForm();
           else inputs[i + 1].focus();
         }
-        if (e.key === 'Escape') close();
+        if (e.key === 'Escape') {
+          close();
+          o.getComposer()?.focus?.();
+        }
+      });
+      input.addEventListener('focus', () => {
+        field = input;
       });
       box.append(label, input);
       return input;
     });
     const btn = doc.createElement('button');
     btn.textContent = 'Insert';
-    const submitForm = () => finish(renderVariables(text, Object.fromEntries(inputs.map((x) => [x.name, x.value])), { defaults: needed }), p);
+    const submitForm = () => {
+      // Never insert a prompt with an unfilled {{variable}}: point at the first empty one instead.
+      const empty = inputs.find((x, i) => !x.value.trim() && needed[i].default == null);
+      if (empty) {
+        empty.setAttribute('aria-invalid', 'true');
+        empty.placeholder = 'Required';
+        return focusField(empty);
+      }
+      finish(renderVariables(text, Object.fromEntries(inputs.map((x) => [x.name, x.value])), { defaults: needed }), p);
+    };
     btn.addEventListener('click', submitForm);
     box.appendChild(btn);
-    inputs[0].focus();
+    focusField(inputs[0]);
   }
 
   /** @param {string} text @param {import('@resync/shared/prompts').Prompt} p */
@@ -146,7 +226,7 @@ export function createPicker(o) {
     const c = o.getComposer();
     close();
     if (!c) return;
-    removeTrailing(c, TRIGGER);
+    removeTrigger(c, TRIGGER);
     const current = readText(c).trim();
     insertText(c, current ? `\n${text}` : text);
     if (p.steps.length > 1) {

@@ -23,6 +23,11 @@ describe('conversation on the page', () => {
     ]);
   });
 
+  it('reads only the code of a code block, not its language label or copy button', () => {
+    document.body.innerHTML = '<div data-testid="assistant-message"><p>Here:</p><pre><div>json</div><button data-testid="code-block-copy">Copy</button><code>{"topic":"x"}</code></pre></div>';
+    expect(readConversation()[0].content).toBe('Here:\n\n```\n{"topic":"x"}\n```');
+  });
+
   it('runs a feature in-chat: sends the instructions, waits for the reply, returns its text', async () => {
     document.body.innerHTML = '<main id="t"></main><textarea placeholder="Reply"></textarea><button aria-label="Send message">Send</button>';
     const sent = [];

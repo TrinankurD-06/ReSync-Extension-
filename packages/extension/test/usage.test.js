@@ -59,4 +59,25 @@ describe('usage estimates', () => {
     await tracker.scan();
     expect(events).toHaveLength(2);
   });
+
+  it('tracker does not count messages the virtual transcript re-adds or loads from history', async () => {
+    const msg = (role, key, text) => role === 'u'
+      ? `<div data-testid="user-message" data-turn-key="${key}">${text}</div>`
+      : `<div data-testid="assistant-message" data-turn-key="${key}" data-is-streaming="false">${text}</div>`;
+    document.body.innerHTML = `<main id="t">${msg('u', 'u2', 'q2')}${msg('a', 'a2', 'r2')}</main>`;
+    const events = [];
+    const tracker = createUsageTracker({ add: async (e) => events.push(e), getOverrides: () => ({}), projectName: () => 'P' });
+    tracker.baseline();
+    const t = document.getElementById('t');
+    // "Load earlier messages": older turns appear above the ones already on the page.
+    t.insertAdjacentHTML('afterbegin', msg('u', 'u1', 'q1') + msg('a', 'a1', 'r1'));
+    await tracker.scan();
+    // Scrolling: the newest turns are removed and added back as new elements.
+    t.innerHTML = msg('u', 'u2', 'q2') + msg('a', 'a2', 'r2');
+    await tracker.scan();
+    expect(events).toEqual([]);
+    t.insertAdjacentHTML('beforeend', msg('u', 'u3', 'q3') + msg('a', 'a3', 'r3'));
+    await tracker.scan();
+    expect(events.map((e) => e.messages ?? 'reply')).toEqual([1, 'reply']);
+  });
 });

@@ -71,6 +71,46 @@ describe(';; quick picker', () => {
     expect(picker.isOpen).toBe(false);
   });
 
+  it('keys that land in the message box while the picker is open go to the picker instead', async () => {
+    // Regression (real claude.ai, 2026-10-17): the editor kept the focus, so the search text was typed into
+    // the message and Enter sent ";;dsa".
+    let sentByEnter = false;
+    ta.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.defaultPrevented) sentByEnter = true;
+    });
+    insertText(ta, 'Intro ;;');
+    await flush();
+    for (const k of 'explain') ta.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+    expect(shadow().querySelector('input').value).toBe('explain');
+    expect(shadow().querySelector('li').textContent).toContain('Explain a concept');
+    ta.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    expect(sentByEnter).toBe(false);
+    for (const k of 'dsa') ta.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+    expect(shadow().querySelector('input[name="concept"]').value).toBe('dsa');
+    ta.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    expect(picker.isOpen).toBe(false);
+    expect(ta.value).toContain('Explain dsa three times');
+    expect(ta.value).not.toMatch(/;;|\{\{concept\}\}/);
+    expect(sentByEnter).toBe(false);
+  });
+
+  it('removes the trigger and any query typed after it, and refuses an empty required variable', async () => {
+    insertText(ta, 'Intro ;;');
+    await flush();
+    insertText(ta, 'dsa'); // typed into the message box before the picker took the focus
+    const input = shadow().querySelector('input');
+    input.value = 'explain';
+    input.dispatchEvent(new Event('input'));
+    key(input, 'Enter');
+    shadow().querySelector('button').click(); // concept left empty
+    expect(picker.isOpen).toBe(true);
+    expect(shadow().querySelector('input[name="concept"]').getAttribute('aria-invalid')).toBe('true');
+    shadow().querySelector('input[name="concept"]').value = 'graphs';
+    shadow().querySelector('button').click();
+    expect(ta.value).toMatch(/^Intro\s*\nExplain graphs three times/);
+    expect(ta.value).not.toContain('dsa');
+  });
+
   it('arrow keys move the selection', async () => {
     insertText(ta, ';;');
     await flush();

@@ -6,18 +6,24 @@ beforeEach(() => {
   document.body.innerHTML = '<main id="thread"></main><textarea placeholder="Reply"></textarea><button aria-label="Send message">Send</button>';
 });
 
-/** Fake claude.ai behaviour: on send, stream a reply (stop button visible), then finish it. */
-function fakeClaude({ streamMs = 30 } = {}) {
+/**
+ * Fake claude.ai behaviour: on send, stream a reply (stop button visible), then finish it.
+ * `keep`: like the real virtualised transcript, keep only the newest N replies in the page.
+ */
+function fakeClaude({ streamMs = 30, keep = Infinity } = {}) {
   const sent = [];
   document.querySelector('button').addEventListener('click', () => {
     const ta = document.querySelector('textarea');
     sent.push(ta.value);
     ta.value = '';
     const msg = document.createElement('div');
-    msg.className = 'font-claude-response';
+    msg.dataset.testid = 'assistant-message';
+    msg.dataset.turnKey = `turn-${sent.length}`;
     msg.dataset.isStreaming = 'true';
     msg.textContent = '...';
-    document.getElementById('thread').appendChild(msg);
+    const thread = document.getElementById('thread');
+    thread.appendChild(msg);
+    while (thread.children.length > keep) thread.firstElementChild.remove();
     const stop = document.createElement('button');
     stop.setAttribute('aria-label', 'Stop response');
     document.body.appendChild(stop);
@@ -73,6 +79,19 @@ describe('chain on a page', () => {
     expect(sent).toEqual(['one', 'two', 'three']);
     expect(updates.some((u) => u.status === 'countdown')).toBe(true);
     expect(ctl.state().state.status).toBe('done');
+  }, 20_000);
+
+  it('finishes a chain when the page keeps only the newest replies (virtualised transcript)', async () => {
+    // Regression (real claude.ai, 2026-10-17): the reply count stays flat in a long chat, so a count-based
+    // wait never saw step 2's reply finish and step 3 was never sent.
+    const sent = fakeClaude({ keep: 1 });
+    document.getElementById('thread').insertAdjacentHTML('beforeend', '<div data-testid="assistant-message" data-turn-key="old" data-is-streaming="false">old</div>');
+    const updates = [];
+    const ctl = createChainController({ getOverrides: () => ({}), broadcast: (m) => updates.push(m.state) });
+    ctl.start({ steps: ['one', 'two', 'three'].map((text) => ({ text, waitFor: 'response', delaySeconds: 0 })) });
+    for (let i = 0; i < 100 && updates.at(-1)?.status !== 'done'; i++) await new Promise((r) => setTimeout(r, 100));
+    expect(updates.at(-1)).toMatchObject({ status: 'done' });
+    expect(sent).toEqual(['one', 'two', 'three']);
   }, 20_000);
 
   it('controller pauses, resumes and cancels', async () => {

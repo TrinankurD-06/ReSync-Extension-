@@ -10,6 +10,8 @@
  *   hasComposer(): boolean,
  *   isStreaming(): boolean,
  *   replyCount(): number,
+ *   lastReply?(): unknown,     identity of the newest reply (preferred over replyCount: claude.ai only keeps
+ *                              part of a long chat in the page, so the count can stay flat as replies arrive)
  *   findAlert(): { kind: 'limit' | 'error', text: string } | null,
  *   send(text: string): boolean,
  * }} ChainPage
@@ -78,6 +80,9 @@ export function createChainRunner(o) {
     return true;
   }
 
+  /** A value that changes whenever a new reply appears. */
+  const replyMarker = () => (o.page.lastReply ? o.page.lastReply() : o.page.replyCount());
+
   /** Check the page for problems that must stop the chain. */
   function problem() {
     const alert = o.page.findAlert();
@@ -88,19 +93,21 @@ export function createChainRunner(o) {
 
   /**
    * Wait until the reply to the message just sent has finished.
-   * @param {number} countBefore reply count before sending
+   * @param {unknown} markerBefore replyMarker() before sending
+   * @param {{ alreadyStarted?: boolean }} [w] a reply is already streaming: just wait for it to finish
    */
-  async function waitForReply(countBefore) {
+  async function waitForReply(markerBefore, w = {}) {
     set({ status: 'waiting-reply' });
     const sentAt = now();
     let quietSince = null;
     while (!cancelled) {
       const p = problem();
       if (p) return stop(p);
-      const started = o.page.replyCount() > countBefore || o.page.isStreaming();
+      const fresh = w.alreadyStarted || replyMarker() !== markerBefore;
+      const started = fresh || o.page.isStreaming();
       if (!started && now() - sentAt > opt.replyStartTimeoutMs) return stop('No reply appeared after sending. Check the chat, then resume or restart the chain.');
       if (now() - sentAt > opt.replyTimeoutMs) return stop('The reply took too long to finish.');
-      if (started && !o.page.isStreaming() && o.page.replyCount() > countBefore) {
+      if (fresh && !o.page.isStreaming()) {
         quietSince ??= now();
         if (now() - quietSince >= opt.settleMs) return true;
       } else {
@@ -157,10 +164,10 @@ export function createChainRunner(o) {
       if (!o.page.hasComposer()) return stop("ReSync can't find the message box, so the chain stopped.");
       if (o.page.isStreaming()) {
         // Something else is still replying: wait for it before sending (never overlap replies).
-        if (!(await waitForReply(o.page.replyCount() - 1))) return;
+        if (!(await waitForReply(replyMarker(), { alreadyStarted: true }))) return;
       }
       set({ status: 'sending' });
-      const before = o.page.replyCount();
+      const before = replyMarker();
       if (!o.page.send(step.text)) return stop('Could not send the message (the send button or message box is not available).');
       set({ sent: [...state.sent, i] });
       if (!(await waitForReply(before))) return;

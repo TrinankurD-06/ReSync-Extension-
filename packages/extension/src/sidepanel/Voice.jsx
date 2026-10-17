@@ -27,6 +27,9 @@ export default function Voice({ text, settings, update }) {
   const [rate, setRate] = useState(settings.voice.rate);
   const [error, setError] = useState('');
   const audio = useRef(/** @type {HTMLAudioElement | null} */ (null));
+  // Where the browser voice has got to (character index), so a speed change can carry on from there.
+  const providerRate = useRef(1);
+  const spoken = useRef({ base: 0, at: 0, rateChanged: false });
 
   let providerMode = false;
   try {
@@ -48,6 +51,7 @@ export default function Voice({ text, settings, update }) {
     setError('');
     if (state === 'paused') {
       if (audio.current) audio.current.play();
+      else if (spoken.current.rateChanged) return speakBrowser(spoken.current.at);
       else speechSynthesis.resume();
       setState('playing');
       return;
@@ -63,6 +67,7 @@ export default function Voice({ text, settings, update }) {
       const bytes = Uint8Array.from(atob(r.audioBase64), (c) => c.charCodeAt(0));
       const url = URL.createObjectURL(new Blob([bytes], { type: r.mimeType }));
       audio.current = new Audio(url);
+      providerRate.current = rate; // the provider already spoke at this speed
       audio.current.onended = () => setState('idle');
       await audio.current.play();
       setState('playing');
@@ -71,20 +76,38 @@ export default function Voice({ text, settings, update }) {
     speakBrowser();
   };
 
-  const speakBrowser = () => {
+  /** Speak with the browser voice from character `from` (a speed change restarts from where it got to). */
+  const speakBrowser = (from = 0, r = rate) => {
     if (typeof speechSynthesis === 'undefined') return setError('Speech is not available in this browser.');
     speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
+    const u = new SpeechSynthesisUtterance(text.slice(from));
+    spoken.current = { base: from, at: from, rateChanged: false };
+    const current = () => spoken.current.base === from; // ignore events from an utterance we replaced
     const v = voices.find((x) => x.voiceURI === voiceURI);
     if (v) u.voice = v;
-    u.rate = rate;
-    u.onend = () => setState('idle');
+    u.rate = r;
+    u.onboundary = (e) => {
+      if (current()) spoken.current.at = from + e.charIndex;
+    };
+    u.onend = () => {
+      if (current()) setState('idle');
+    };
     u.onerror = (e) => {
+      if (!current()) return;
       if (e.error !== 'interrupted' && e.error !== 'canceled') setError(`Speech error: ${e.error}`);
       setState('idle');
     };
     speechSynthesis.speak(u);
     setState('playing');
+  };
+
+  // The browser voice reads the speed only when speech starts: restart from the current word at the new speed.
+  const changeRate = (r) => {
+    setRate(r);
+    remember({ rate: r });
+    if (audio.current) audio.current.playbackRate = r / providerRate.current;
+    else if (state === 'playing') speakBrowser(spoken.current.at, r);
+    else if (state === 'paused') spoken.current.rateChanged = true;
   };
 
   const pause = () => {
@@ -115,7 +138,7 @@ export default function Voice({ text, settings, update }) {
         </>
       )}
       <label htmlFor="rate">Speed: {rate.toFixed(1)}x</label>
-      <input id="rate" type="range" min="0.5" max="2" step="0.1" value={rate} onChange={(e) => { setRate(Number(e.target.value)); remember({ rate: Number(e.target.value) }); }} />
+      <input id="rate" type="range" min="0.5" max="2" step="0.1" value={rate} onChange={(e) => changeRate(Number(e.target.value))} />
       <div className="small muted">{providerMode ? 'Using your provider voice (API mode, the summary text is sent to the provider).' : 'Using the free browser voice.'}</div>
       {error && <div className="small error">{error}</div>}
     </div>

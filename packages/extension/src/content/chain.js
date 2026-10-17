@@ -2,7 +2,7 @@
 // the page: selectors for streaming/replies/alerts, the composer for sending, and a MutationObserver so it
 // reacts as soon as the streaming indicator changes (polling is only a fallback cap).
 import { createChainRunner } from '../lib/chainRunner.js';
-import { query, queryAll, isStreaming, findAlert } from '../lib/selectors.js';
+import { query, queryAll, isStreaming, findAlert, messageKey } from '../lib/selectors.js';
 import { insertText, submit } from '../lib/composer.js';
 
 /**
@@ -15,6 +15,10 @@ export function realPage(getOverrides) {
     hasComposer: () => Boolean(query('composer', o())),
     isStreaming: () => isStreaming(o()),
     replyCount: () => queryAll('assistantMessage', o()).length,
+    lastReply: () => {
+      const el = queryAll('assistantMessage', o()).at(-1);
+      return el ? messageKey(el) : null;
+    },
     findAlert: () => findAlert(o()),
     send(text) {
       const c = query('composer', o());

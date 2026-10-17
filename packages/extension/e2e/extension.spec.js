@@ -122,7 +122,7 @@ test('ReSync extension end to end', async () => {
       // Step 2 is a timer step: pause during its countdown.
       await expect(panel.getByText('Waiting before the next step')).toBeVisible({ timeout: 20_000 });
       await panel.getByRole('button', { name: 'Pause' }).click();
-      await expect(panel.getByText('Paused', { exact: true })).toBeVisible({ timeout: 10_000 });
+      await expect(panel.getByText(/^Paused: step 2 will not be sent until you press Resume/)).toBeVisible({ timeout: 10_000 });
       const sentWhilePaused = await claude.evaluate(() => window.sentMessages.length);
       await claude.waitForTimeout(3000);
       expect(await claude.evaluate(() => window.sentMessages.length)).toBe(sentWhilePaused);
