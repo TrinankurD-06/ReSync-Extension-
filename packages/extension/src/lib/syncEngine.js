@@ -107,14 +107,14 @@ export function createExtensionSync(deps) {
         // 4) Colours: push ours; on a fresh browser with none, take the server's.
         if (s.privacy.syncColours) {
           const remote = await c.getColours();
-          const hasLocal = Object.keys(s.colours.assignments).length > 0;
-          if (!hasLocal && Object.keys(remote.assignments ?? {}).length) {
+          const hasLocal = Object.keys(s.colours.assignments).length > 0 || s.colours.custom.length > 0;
+          if (!hasLocal && (Object.keys(remote.assignments ?? {}).length || remote.presets?.length)) {
             await deps.settings.update((x) => {
-              x.colours = { preset: remote.preset ?? x.colours.preset, assignments: remote.assignments };
+              x.colours = { preset: remote.preset ?? x.colours.preset, assignments: remote.assignments ?? {}, custom: remote.presets ?? [] };
             });
             summary.colours = 'pulled';
           } else if (hasLocal) {
-            await c.putColours({ preset: s.colours.preset, presets: [], assignments: s.colours.assignments });
+            await c.putColours({ preset: s.colours.preset, presets: s.colours.custom, assignments: s.colours.assignments });
             summary.colours = 'pushed';
           }
         }

@@ -60,7 +60,7 @@ async function deliverPendingInsert() {
 }
 
 function repaint() {
-  applyColours(settings.colours.assignments, { overrides: settings.selectorOverrides });
+  applyColours(settings.colours.assignments, { overrides: settings.selectorOverrides, custom: settings.colours.custom });
 }
 
 /** Run fn at most once per `ms` (trailing), for MutationObserver bursts. */

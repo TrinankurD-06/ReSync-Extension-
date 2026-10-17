@@ -110,7 +110,7 @@ describe('extension sync', () => {
     await alice.put('/api/v1/colours', { preset: 'personal', presets: [], assignments: { 'chat:c1': 'ideas' } });
     const ext = await setup(app, { signedInAs: alice });
     expect((await ext.sync.syncNow()).colours).toBe('pulled');
-    expect((await ext.settings.get()).colours).toEqual({ preset: 'personal', assignments: { 'chat:c1': 'ideas' } });
+    expect((await ext.settings.get()).colours).toEqual({ preset: 'personal', assignments: { 'chat:c1': 'ideas' }, custom: [] });
 
     await ext.sync.share({ kind: 'summary', title: 'Pricing summary', content: 'We priced three plans.' });
     expect((await alice.get('/api/v1/shared')).body.items[0]).toMatchObject({ kind: 'summary', title: 'Pricing summary' });

@@ -16,7 +16,7 @@ export const SETTINGS_KEY = 'resync.settings';
  *   },
  *   selectorOverrides: Record<string, string[]>,
  *   voice: { voiceURI: string, rate: number, useProviderTts: boolean, ttsProvider: string, ttsVoice: string },
- *   colours: { preset: string, assignments: Record<string, string> },
+ *   colours: { preset: string, assignments: Record<string, string>, custom: { id: string, label: string, colour: string }[] },
  * }} Settings
  */
 
@@ -28,7 +28,7 @@ export function defaultSettings() {
     privacy: { apiModeAcknowledged: {}, syncUsage: true, syncColours: true, syncPrompts: true },
     selectorOverrides: {},
     voice: { voiceURI: '', rate: 1, useProviderTts: false, ttsProvider: '', ttsVoice: 'marin' },
-    colours: { preset: 'startup', assignments: {} },
+    colours: { preset: 'startup', assignments: {}, custom: [] },
   };
 }
 
@@ -48,7 +48,7 @@ export function normaliseSettings(raw) {
     privacy: { ...d.privacy, ...(r.privacy ?? {}), apiModeAcknowledged: { ...(r.privacy?.apiModeAcknowledged ?? {}) } },
     selectorOverrides: { ...(r.selectorOverrides ?? {}) },
     voice: { ...d.voice, ...(r.voice ?? {}) },
-    colours: { ...d.colours, ...(r.colours ?? {}), assignments: { ...(r.colours?.assignments ?? {}) } },
+    colours: { ...d.colours, ...(r.colours ?? {}), assignments: { ...(r.colours?.assignments ?? {}) }, custom: [...(r.colours?.custom ?? [])] },
   };
 }
 
