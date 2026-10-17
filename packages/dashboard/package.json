@@ -1,0 +1,21 @@
+{
+  "name": "@resync/dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "ReSync team dashboard (React): prompts, usage, queue reports, shared passports, team.",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "test:e2e": "vite build && playwright test"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.1.2",
+    "vite": "^8.3.4"
+  },
+  "dependencies": {
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  }
+}
