@@ -5,6 +5,7 @@ import { treeToMermaid } from '@resync/shared/tree';
 import { createArtifacts, ARTIFACTS_KEY } from '../lib/artifacts.js';
 import { setPendingInsert } from '../content/conversation.js';
 import { aiRun, toPage, activeClaudeTab, panelSync } from './bridge.js';
+import { Icon } from './Icon.jsx';
 import Voice from './Voice.jsx';
 
 const FEATURES = [
@@ -31,6 +32,13 @@ export default function AiTab({ settings, update }) {
     return () => chrome.storage.onChanged.removeListener(onChange);
   }, [artifacts]);
 
+  const modeKind = (feature) => {
+    try {
+      return resolveFeature(settings.ai, feature).mode === 'api' ? 'api' : 'chat';
+    } catch {
+      return 'off';
+    }
+  };
   const modeLabel = (feature) => {
     try {
       const r = resolveFeature(settings.ai, feature);
@@ -112,12 +120,13 @@ export default function AiTab({ settings, update }) {
     <>
       {FEATURES.map(([id, label, desc]) => (
         <section key={id} className="card">
-          <div className="row">
-            <strong>{label}</strong>
+          <div className="feature-head">
+            <span className="feature-icon"><Icon name={id} /></span>
+            <strong style={{ flex: 1 }}>{label}</strong>
             <button className="primary" disabled={Boolean(busy)} onClick={() => run(id)}>{busy === id ? 'Working...' : 'Run'}</button>
           </div>
-          <div className="small muted">{desc}</div>
-          <div className="small">Mode: {modeLabel(id)}</div>
+          <div className="small muted" style={{ marginTop: 6 }}>{desc}</div>
+          <span className="mode-pill" data-mode={modeKind(id)}>{modeLabel(id)}</span>
         </section>
       ))}
       {busy && <p className="small muted">{resolveSafe(settings, busy) === 'in-chat' ? 'Sent in your chat. Waiting for Claude to finish replying...' : 'Waiting for the provider...'}</p>}

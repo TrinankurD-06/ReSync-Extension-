@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { renderVariables, promptText, extractVariables, slugify } from '@resync/shared/prompts';
 import { createLibrary, searchPrompts, facets, promptId, LIBRARY_KEY } from '../lib/library.js';
 import { toPage } from './bridge.js';
+import { Icon } from './Icon.jsx';
 
 /** Live library list for the side panel. */
 function useLibrary() {
@@ -43,10 +44,13 @@ export default function PromptsTab({ onRunChain }) {
   return (
     <>
       <div className="row">
-        <input aria-label="Search prompts" placeholder="Search prompts" value={q.text} onChange={(e) => setQ({ ...q, text: e.target.value })} />
-        <button className="secondary" onClick={() => setEditing(newDraft())}>New</button>
+        <div className="search">
+          <Icon name="search" size={16} />
+          <input aria-label="Search prompts" placeholder="Search prompts" value={q.text} onChange={(e) => setQ({ ...q, text: e.target.value })} />
+        </div>
+        <button className="primary icon-btn" aria-label="New" title="New prompt" onClick={() => setEditing(newDraft())}><Icon name="plus" size={16} /> New</button>
       </div>
-      <div className="row" style={{ marginTop: 6 }}>
+      <div className="filters">
         <select aria-label="Scope" value={q.scope} onChange={(e) => setQ({ ...q, scope: e.target.value })}>
           <option value="all">All scopes</option><option value="personal">Personal</option><option value="team">Team</option>
         </select>
@@ -57,20 +61,23 @@ export default function PromptsTab({ onRunChain }) {
           <option value="">All tags</option>{f.tags.map((t) => <option key={t}>{t}</option>)}
         </select>
       </div>
-      <p className="small muted">Tip: type <code>;;</code> in the claude.ai message box to pick a prompt without leaving the chat.</p>
-      {msg && <p className="small">{msg}</p>}
+      <div className="tip">⚡ <span>Type <code>;;</code> in the claude.ai message box to pick a prompt without leaving the chat.</span></div>
+      {msg && <p className="small ok">{msg}</p>}
       {results.map((p) => (
-        <div className="card" key={promptId(p)}>
-          <div className="row">
-            <strong>{p.title}</strong>
-            <span className="muted small" style={{ flex: '0 0 auto' }}>{p.scope}</span>
+        <div className="card prompt-card" data-category={p.category} key={promptId(p)}>
+          <div className="prompt-head">
+            <span className="cat-icon"><Icon name={['dev', 'startup', 'study'].includes(p.category) ? p.category : 'other'} size={16} /></span>
+            <div style={{ minWidth: 0 }}>
+              <div className="prompt-title">{p.title}</div>
+              {p.description && <div className="prompt-desc">{p.description}</div>}
+            </div>
+            <span className="scope-pill" data-scope={p.scope}>{p.scope}</span>
           </div>
-          {p.description && <div className="small muted">{p.description}</div>}
-          <div>{[p.category, ...p.tags].map((t) => <span className="tag" key={t}>{t}</span>)}</div>
+          <div className="tags">{[p.category, ...p.tags].map((t) => <span className="tag" key={t}>{t}</span>)}</div>
           {active && promptId(active) === promptId(p) ? (
             <VariablesForm prompt={p} onSubmit={(v) => insert(p, v)} onCancel={() => setActive(null)} />
           ) : (
-            <div className="row" style={{ marginTop: 6 }}>
+            <div className="actions">
               <button className="primary" onClick={() => (p.variables.length ? setActive(p) : insert(p))}>{p.steps.length > 1 ? 'Insert step 1' : 'Insert'}</button>
               {p.steps.length > 1 && <button className="secondary" onClick={() => onRunChain(p)}>Run chain ({p.steps.length} steps)</button>}
               <button className="secondary" onClick={() => setEditing({ ...p, _prevId: promptId(p) })}>Edit</button>
@@ -78,7 +85,7 @@ export default function PromptsTab({ onRunChain }) {
           )}
         </div>
       ))}
-      {results.length === 0 && <p className="muted">No prompts match.</p>}
+      {results.length === 0 && <div className="empty">No prompts match your search.<br />Try another word, or press <strong>New</strong> to write one.</div>}
     </>
   );
 }

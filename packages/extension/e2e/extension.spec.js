@@ -194,10 +194,12 @@ test('ReSync extension end to end', async () => {
 
     // README screenshot (only with RESYNC_SCREENSHOTS=1): the side panel at a panel-like width.
     if (process.env.RESYNC_SCREENSHOTS === '1') {
+      await panel.bringToFront(); // a background tab may never paint a new frame to capture
       await panel.setViewportSize({ width: 400, height: 760 });
       await tab('Prompts');
       await panel.getByLabel('Search prompts').fill('');
-      await panel.screenshot({ path: path.resolve(here, '../../../docs/screenshots/extension-panel.png') });
+      await panel.mouse.move(0, 700);
+      await panel.screenshot({ path: path.resolve(here, '../../../docs/screenshots/extension-panel.png'), animations: 'disabled' });
     }
   } finally {
     await context.close();

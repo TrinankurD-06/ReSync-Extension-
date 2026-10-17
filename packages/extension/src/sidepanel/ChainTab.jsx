@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { renderVariables } from '@resync/shared/prompts';
 import { VariablesForm } from './PromptsTab.jsx';
 import { toPage } from './bridge.js';
+import { Icon } from './Icon.jsx';
 
 const STATUS_TEXT = {
   idle: 'Ready',
@@ -67,7 +68,7 @@ export default function ChainTab({ prompt }) {
           )}
         </div>
       )}
-      {!prompt && !state && <p className="muted">Pick a chain in the Prompts tab ("Run chain").</p>}
+      {!prompt && !state && <div className="empty"><Icon name="chain" size={26} /><div>No chain picked yet.</div><div className="small">In the Prompts tab, press <strong>Run chain</strong> on a multi-step prompt.</div></div>}
       {prompt && !running && (
         <div className="card">
           <strong>{prompt.title}</strong>
