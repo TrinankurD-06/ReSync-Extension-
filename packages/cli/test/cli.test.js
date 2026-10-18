@@ -211,10 +211,14 @@ describe('resync passport|tree|summary --api (mocked provider)', () => {
     expect(r.ok).toBe(true);
     const md = await fs.readFile(r.file, 'utf8');
     expect(md).toContain('## Next 3 steps\n\nNext 3 steps details');
+    // Meta is the first section and filled by ReSync: date, project folder, transcript.
+    expect(md).toMatch(new RegExp(`^# Context Passport\\n\\n## Meta\\n\\n- Date: 2026-10-17\\n- Project: ${path.basename(cwd)}\\n- Source: Claude Code session session\\n- Made with: API mode: local/qwen\\n`));
     expect(r.file).toContain(path.join('.resync', 'passports'));
     expect(errs.join()).toMatch(/API mode: sending this conversation .* to local/);
     const sent = calls[0].body.messages.at(-1).content;
     expect(sent).toContain('Build the login page');
+    expect(sent).toContain(`- Project: ${path.basename(cwd)}`);
+    expect(sent).toContain('Rules for every answer:');
     expect(sent).not.toContain('secret thoughts');
     expect(calls[0].body.model).toBe('qwen');
   });
@@ -242,10 +246,16 @@ describe('resync passport|tree|summary --api (mocked provider)', () => {
 
   it('writes a validated tree as JSON plus a Mermaid mindmap', async () => {
     const { cwd, transcript, cfg } = await setup();
-    const tree = { topic: 'Login page', turnRange: [1, 2], children: [{ topic: 'Form', turnRange: [2, 2], children: [] }] };
+    const tree = { topic: 'Login page', turnRange: [1, 2], children: [{ topic: 'Ask', turnRange: [1, 1], children: [] }, { topic: 'Form', turnRange: [2, 2], children: [] }] };
     const r = await runApiFeature('tree', { config: cfg, cwd, transcript, out: () => {}, err: () => {}, write: () => {}, fetch: streamingFetch('```json\n' + JSON.stringify(tree) + '\n```') });
     expect(JSON.parse(await fs.readFile(r.file, 'utf8'))).toEqual(tree);
     expect(await fs.readFile(r.file.replace(/\.json$/, '.mmd'), 'utf8')).toMatch(/^mindmap\n {2}root\(\(Login page\)\)/);
+    // The transcript has 2 turns: a tree that leaves turn 1 uncovered is fixed, and the fix is reported.
+    const errs = [];
+    const gap = { topic: 'Login page', turnRange: [1, 5], children: [{ topic: 'Form', turnRange: [2, 2], children: [] }] };
+    const r2 = await runApiFeature('tree', { config: cfg, cwd, transcript, out: () => {}, err: (s) => errs.push(s), write: () => {}, now: new Date(Date.now() + 60_000), fetch: streamingFetch('```json\n' + JSON.stringify(gap) + '\n```') });
+    expect(JSON.parse(await fs.readFile(r2.file, 'utf8'))).toEqual({ topic: 'Login page', turnRange: [1, 2], children: [{ topic: 'Form', turnRange: [1, 2], children: [] }] });
+    expect(errs.join('\n')).toMatch(/fixed: Root range 1-5 set to 1-2/);
   });
 
   it('rejects an invalid tree reply and writes a summary of 5 to 10 lines', async () => {
@@ -253,6 +263,11 @@ describe('resync passport|tree|summary --api (mocked provider)', () => {
     await expect(runApiFeature('tree', { config: cfg, cwd, transcript, out: () => {}, err: () => {}, fetch: streamingFetch('no json here') })).rejects.toThrow(/not valid/);
     const r = await runApiFeature('summary', { config: cfg, cwd, transcript, out: () => {}, err: () => {}, write: () => {}, fetch: streamingFetch('- a\n- b\n- c\n- d\n- e\n- f') });
     expect((await fs.readFile(r.file, 'utf8')).trim().split('\n')).toEqual(['a', 'b', 'c', 'd', 'e', 'f']);
+    // The audience option changes the prompt and the line range.
+    const calls = [];
+    const s2 = await runApiFeature('summary', { config: cfg, cwd, transcript, audience: 'memory', out: () => {}, err: () => {}, write: () => {}, now: new Date(Date.now() + 60_000), fetch: streamingFetch('- a\n- b\n- c\n- d\n- e\n- f', calls) });
+    expect(calls[0].body.messages.at(-1).content).toContain('in 3 to 5 lines');
+    expect((await fs.readFile(s2.file, 'utf8')).trim().split('\n')).toHaveLength(5);
   });
 
   it('explains how to proceed when no transcript can be found', async () => {

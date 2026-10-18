@@ -1,7 +1,8 @@
 // Build 1 of 2: side panel page + background service worker (ES module; MV3 allows "type": "module").
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, copyFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { resyncSeeds } from './seedsPlugin.js';
 
 /**
@@ -27,8 +28,28 @@ function e2eManifest() {
   };
 }
 
+/**
+ * Copy Mermaid's prebuilt browser bundle into the extension (vendor/mermaid.min.js). Extension pages may only run
+ * scripts packaged with the extension (MV3 CSP), so it can't come from a CDN. The side panel loads it only when a
+ * mindmap is shown, so it costs nothing until then.
+ */
+function vendorMermaid() {
+  let outDir = 'dist';
+  return {
+    name: 'resync-vendor-mermaid',
+    configResolved(c) {
+      outDir = c.build.outDir;
+    },
+    closeBundle() {
+      const file = createRequire(import.meta.url).resolve('mermaid/dist/mermaid.min.js');
+      mkdirSync(`${outDir}/vendor`, { recursive: true });
+      copyFileSync(file, `${outDir}/vendor/mermaid.min.js`);
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => ({
-  plugins: [react(), e2eManifest(), resyncSeeds()],
+  plugins: [react(), e2eManifest(), resyncSeeds(), vendorMermaid()],
   base: './',
   build: {
     // The test build goes to its own folder so dist/ is always the real extension.

@@ -14,6 +14,7 @@ function plain(p) {
     slug: o.slug, title: o.title, category: o.category, tags: o.tags ?? [], description: o.description ?? '', scope: o.scope,
     variables: (o.variables ?? []).map((v) => Object.fromEntries(Object.entries({ name: v.name, description: v.description, default: v.default }).filter(([, x]) => x != null))),
     steps: (o.steps ?? []).map((s) => ({ text: s.text, waitFor: s.waitFor, delaySeconds: s.delaySeconds })),
+    ...(o.chain ? { chain: Object.fromEntries(Object.entries({ type: o.chain.type, intake: o.chain.intake, successCriteria: o.chain.successCriteria }).filter(([, x]) => x != null)) } : {}),
     body: o.body ?? '',
   };
 }
@@ -53,6 +54,7 @@ async function findAccessible(user, id) {
 async function saveVersion(p, next, userId) {
   await PromptVersion.create({ promptId: p._id, version: p.version, snapshot: plain(p), editedBy: p.updatedBy ?? p.ownerId });
   Object.assign(p, next, { version: p.version + 1, updatedBy: userId });
+  if (!next.chain) p.chain = undefined; // an edit that removes the chain settings
   await p.save();
   return p;
 }

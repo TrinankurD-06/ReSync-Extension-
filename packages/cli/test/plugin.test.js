@@ -7,7 +7,8 @@ import { generateCommands, promptToCommand, escapeDollars, commandName } from '.
 import { writeCommands, loadMergedLibrary, buildLocalPlugin, pluginSourceDir, seedPromptsDir } from '../src/plugin/build.js';
 import { validateTopicTree, treeToMermaid } from '@resync/shared/tree';
 import { parsePrompt, validatePrompt, serializePrompt } from '@resync/shared/prompts';
-import { check, toMermaid } from '../../plugin/scripts/tree.mjs';
+import { check, checkRanges, toMermaid } from '../../plugin/scripts/tree.mjs';
+import { hasSharedRules } from '@resync/shared/rules';
 
 beforeEach(async () => {
   await isolateHome();
@@ -42,12 +43,23 @@ describe('generated plugin commands', () => {
     expect(r).toContain('.resync/passports/');
     expect(t).toContain('"${CLAUDE_PLUGIN_ROOT}/scripts/tree.mjs"');
     expect(frontmatter(t)).toContain('allowed-tools: Bash(node *)');
+    // Meta first, filled with the session id; every core command ends its instructions with the shared rules.
+    expect(p.indexOf('## Meta')).toBeLessThan(p.indexOf('## Goal'));
+    expect(p).toContain('- Source: Claude Code session ${CLAUDE_SESSION_ID}');
+    const { 'summary.md': sum } = generateCommands([]);
+    for (const text of [p, t, sum]) expect(text).toContain('Rules for every answer:');
+    expect(sum).toContain('Status update for Slack');
   });
 
   it('maps variables to arguments and renders chains as ordered steps', async () => {
     const { prompts } = await loadMergedLibrary([seedPromptsDir()]);
     const chain = prompts.find((p) => p.slug === 'launch-chain');
     const text = promptToCommand(chain);
+    // Chains: intake first, then the steps, the success-criteria step (planning chain) and the shared rules.
+    expect(text).toContain('Before step 1 (intake)');
+    expect(text).toContain('ask me at most 3 short questions');
+    expect(text).toContain('## Step 4');
+    expect(hasSharedRules(text.trim())).toBe(true);
     expect(frontmatter(text)).toContain('argument-hint: "[product]"');
     expect(text).toContain('## Step 1');
     expect(text).toContain('## Step 3');
@@ -105,6 +117,15 @@ describe('plugin tree.mjs (dependency-free)', () => {
       expect(check(b, 'root', []).length, JSON.stringify(b)).toBeGreaterThan(0);
       expect(validateTopicTree(b).ok, JSON.stringify(b)).toBe(false);
     }
+  });
+
+  it('reports range-rule violations so Claude fixes the JSON (children inside parents, no top-level overlap)', () => {
+    expect(checkRanges(TREE, [])).toEqual([]);
+    const outside = { topic: 'r', turnRange: [1, 4], children: [{ topic: 'a', turnRange: [1, 2], children: [{ topic: 'deep', turnRange: [2, 3], children: [] }] }, { topic: 'b', turnRange: [2, 4], children: [] }] };
+    const errs = checkRanges(outside, []);
+    expect(errs.join('\n')).toMatch(/must lie within its parent's \[1,2\]/);
+    expect(errs.join('\n')).toMatch(/"a" and "b" overlap/);
+    expect(checkRanges({ topic: 'r', turnRange: [1, 6], children: [{ topic: 'a', turnRange: [2, 3], children: [] }] }, [], 6)[0]).toMatch(/cover turns 1 to 6/);
   });
 
   it('runs as a script: writes the .mmd file, exits 1 on invalid input', async () => {

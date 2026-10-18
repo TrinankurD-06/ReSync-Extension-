@@ -11,7 +11,12 @@ If a value is missing and has no default, ask me for it before starting.
 
 ---
 
-Work through these steps in order. Finish each step completely (and show me its result) before starting the next.
+Before step 1 (intake): check that you have what this chain needs.
+If anything is missing from what I gave you, ask me at most 3 short questions in one message (the ones that matter most for this chain) and wait for my answer. If I skip, continue and record your assumptions, marked (assumed).
+Keep these facts as the chain context (product facts, budget, team size, team members with roles, deadline, primary success metric, assumptions) and use them in every step, together with the previous step's output. Never ask again for anything already in the chain context.
+If a step asks for a field the chain context cannot fill (for example an owner with no team names), relabel it (owner role) or leave it out. Never output placeholders.
+
+Then work through these steps in order. Finish each step completely (and show me its result) before starting the next.
 
 ## Step 1
 
@@ -24,3 +29,11 @@ Implement the plan above. Keep the change small and match the surrounding code s
 ## Step 3
 
 Write or update tests for what you just built, run them, and report the results.
+
+Apply these rules in every step.
+
+Rules for every answer:
+- Mark anything inferred or unconfirmed as (assumed).
+- Never invent file paths, names, numbers or commands. Write 'unknown' instead.
+- Never include API keys, tokens, passwords or personal contact details.
+- Exclude the current request itself from the output.

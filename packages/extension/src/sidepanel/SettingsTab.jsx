@@ -3,6 +3,7 @@ import { listAdapters, hostPermissionsFor } from '@resync/shared/providers';
 import { FEATURES } from '@resync/shared/models';
 import { createVault } from '../lib/vault.js';
 import { STATUS_KEY } from '../lib/syncEngine.js';
+import { createUsageStore, projectFileTokens } from '../lib/usageEstimates.js';
 import { testProvider, panelSync } from './bridge.js';
 
 const FEATURE_LABELS = { passport: 'Context Passport', tree: 'Topic tree', summary: 'Summary', promptTools: 'Prompt tools', tts: 'Voice (provider TTS)' };
@@ -19,6 +20,7 @@ export default function SettingsTab({ settings, update }) {
       <ProvidersSection settings={settings} update={update} vault={vault} />
       <FeatureMapSection settings={settings} update={update} />
       <PrivacySection settings={settings} update={update} />
+      <UsageModelSection settings={settings} update={update} />
       <SelectorsSection settings={settings} update={update} />
     </>
   );
@@ -303,6 +305,65 @@ function PrivacySection({ settings, update }) {
       ))}
       <p className="small">API mode approved for: {acked.length ? acked.join(', ') : 'nothing yet'}</p>
       {acked.length > 0 && <button className="secondary" onClick={() => update((s) => { s.privacy.apiModeAcknowledged = {}; })}>Ask again before sending</button>}
+    </section>
+  );
+}
+
+/** Assumptions behind "Estimated tokens processed" (Usage tab). */
+function UsageModelSection({ settings, update }) {
+  const m = settings.usage;
+  const [detected, setDetected] = useState({});
+  const [name, setName] = useState('');
+  const [tokens, setTokens] = useState('');
+  useEffect(() => {
+    createUsageStore().detectedProjects().then(setDetected);
+  }, []);
+  const setRange = (key, side, v) => update((s) => {
+    s.usage[key] = { ...s.usage[key], [side]: Number(v) };
+  });
+  const ranges = [
+    ['imageTokens', 'Each attached image'],
+    ['fileTokens', 'Each attached file (its size is not shown)'],
+    ['hiddenTokens', 'Hidden instructions per turn (unknown)'],
+    ['projectDefault', "Project files, when ReSync can't detect them"],
+  ];
+  const projects = [...new Set([...Object.keys(detected), ...Object.keys(m.projectFiles)])].sort();
+  return (
+    <section>
+      <h2>Usage estimates</h2>
+      <p className="small muted">claude.ai doesn't show real token counts. These assumptions set the low and high ends of "Estimated tokens processed" in the Usage tab.</p>
+      {ranges.map(([k, label]) => (
+        <div key={k}>
+          <label>{label}: tokens, low to high</label>
+          <div className="row">
+            <input type="number" min="0" aria-label={`${label} low`} value={m[k].low} onChange={(e) => setRange(k, 'low', e.target.value)} />
+            <input type="number" min="0" aria-label={`${label} high`} value={m[k].high} onChange={(e) => setRange(k, 'high', e.target.value)} />
+          </div>
+        </div>
+      ))}
+      <label htmlFor="cap">Project capacity (tokens at "100% of project capacity")</label>
+      <input id="cap" type="number" min="1" value={m.projectCapacityTokens} onChange={(e) => update((s) => { s.usage.projectCapacityTokens = Number(e.target.value); })} />
+      <h3 className="small">Project files</h3>
+      <p className="small muted">ReSync reads "N% of project capacity used" when you open a project page. If it can't, enter the size here (tokens); otherwise the default above is used.</p>
+      {projects.map((p) => {
+        const r = projectFileTokens(p, { detected, model: m });
+        return (
+          <div className="row" key={p}>
+            <span>{p}</span>
+            <span className="small muted">{r.source === 'detected' ? `detected: ${detected[p].percent}% (${r.low} to ${r.high})` : `entered: ${r.low}`}</span>
+            {m.projectFiles[p] != null && <button className="secondary" onClick={() => update((s) => { delete s.usage.projectFiles[p]; })}>Remove</button>}
+          </div>
+        );
+      })}
+      <div className="row">
+        <input placeholder="Project name (as in the sidebar)" value={name} onChange={(e) => setName(e.target.value)} aria-label="Project name" />
+        <input type="number" min="0" placeholder="Tokens" value={tokens} onChange={(e) => setTokens(e.target.value)} aria-label="Project file tokens" />
+        <button className="secondary" disabled={!name.trim() || tokens === ''} onClick={async () => {
+          await update((s) => { s.usage.projectFiles[name.trim()] = Number(tokens); });
+          setName('');
+          setTokens('');
+        }}>Add</button>
+      </div>
     </section>
   );
 }

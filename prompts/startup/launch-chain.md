@@ -4,6 +4,9 @@ category: startup
 tags: [chain, launch, marketing]
 description: Positioning, then channels, then a one-week launch calendar.
 scope: team
+chain:
+  type: planning
+  successCriteria: true
 variables:
   - name: product
     description: One line about the product

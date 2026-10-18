@@ -22,8 +22,34 @@ export function check(n, at, errors, depth = 1) {
   return errors;
 }
 
+/**
+ * The range rules from the tree prompt: children lie within their parent's turnRange, and top-level ranges
+ * don't overlap (and, when the turn count is known, cover 1 to turns). Run after check() found no errors.
+ * @param {any} tree @param {string[]} errors @param {number} [turns]
+ */
+export function checkRanges(tree, errors, turns) {
+  const walk = (n, at) => {
+    n.children.forEach((c, i) => {
+      if (c.turnRange[0] < n.turnRange[0] || c.turnRange[1] > n.turnRange[1]) errors.push(`${at}.children[${i}]: turnRange must lie within its parent's ${JSON.stringify(n.turnRange)}`);
+      walk(c, `${at}.children[${i}]`);
+    });
+  };
+  walk(tree, 'root');
+  const top = [...tree.children].sort((a, b) => a.turnRange[0] - b.turnRange[0]);
+  for (let i = 1; i < top.length; i++) {
+    if (top[i].turnRange[0] <= top[i - 1].turnRange[1]) errors.push(`top-level topics "${top[i - 1].topic}" and "${top[i].topic}" overlap`);
+  }
+  if (turns && top.length) {
+    if (top[0].turnRange[0] !== 1 || top.at(-1).turnRange[1] !== turns) errors.push(`top-level topics must together cover turns 1 to ${turns}`);
+    for (let i = 1; i < top.length; i++) {
+      if (top[i].turnRange[0] > top[i - 1].turnRange[1] + 1) errors.push(`turns ${top[i - 1].turnRange[1] + 1}-${top[i].turnRange[0] - 1} are not covered by any top-level topic`);
+    }
+  }
+  return errors;
+}
+
 /** @param {string} s */
-const text = (s) => String(s).replace(/[()[\]{}<>"`]/g, ' ').replace(/\s+/g, ' ').trim() || '-';
+const text =(s) => String(s).replace(/[()[\]{}<>"`]/g, ' ').replace(/\s+/g, ' ').trim() || '-';
 
 /** @param {any} tree */
 export function toMermaid(tree) {
@@ -51,6 +77,7 @@ function main() {
     process.exit(1);
   }
   const errors = check(data, 'root', []);
+  if (!errors.length) checkRanges(data, errors);
   if (errors.length) {
     console.error(`Topic tree is invalid:\n- ${errors.join('\n- ')}`);
     process.exit(1);

@@ -1,6 +1,9 @@
 // Extension settings (chrome.storage.local). NO secrets here: API keys live only in the vault.
 // Defaults follow the spec: local-only (no server), every AI feature in-chat, API mode off until a provider is added.
 import { defaultAiSettings, parseAiSettings } from '@resync/shared/models';
+import { summaryAudience } from '@resync/shared/templates';
+import { mergeChainContext } from '@resync/shared/chains';
+import { defaultUsageModel, normaliseUsageModel } from './usageEstimates.js';
 
 export const SETTINGS_KEY = 'resync.settings';
 
@@ -17,6 +20,12 @@ export const SETTINGS_KEY = 'resync.settings';
  *   selectorOverrides: Record<string, string[]>,
  *   voice: { voiceURI: string, rate: number, useProviderTts: boolean, ttsProvider: string, ttsVoice: string },
  *   colours: { preset: string, assignments: Record<string, string>, custom: { id: string, label: string, colour: string }[] },
+ *   summary: { audience: import('@resync/shared/templates').SummaryAudience },
+ *   chains: {
+ *     context: import('@resync/shared/chains').ChainContext,   saved facts (team, budget...) reused by every chain; local only
+ *     successCriteria: Record<string, boolean>,                per chain slug: success-criteria step on/off
+ *   },
+ *   usage: import('./usageEstimates.js').UsageModel,
  * }} Settings
  */
 
@@ -29,6 +38,9 @@ export function defaultSettings() {
     selectorOverrides: {},
     voice: { voiceURI: '', rate: 1, useProviderTts: false, ttsProvider: '', ttsVoice: 'marin' },
     colours: { preset: 'startup', assignments: {}, custom: [] },
+    summary: { audience: 'recap' },
+    chains: { context: mergeChainContext(), successCriteria: {} },
+    usage: defaultUsageModel(),
   };
 }
 
@@ -49,6 +61,13 @@ export function normaliseSettings(raw) {
     selectorOverrides: { ...(r.selectorOverrides ?? {}) },
     voice: { ...d.voice, ...(r.voice ?? {}) },
     colours: { ...d.colours, ...(r.colours ?? {}), assignments: { ...(r.colours?.assignments ?? {}) }, custom: [...(r.colours?.custom ?? [])] },
+    summary: { audience: summaryAudience(r.summary?.audience) },
+    chains: {
+      // Only the reusable facts are kept; per-run inputs and assumptions belong to one run.
+      context: { ...mergeChainContext(r.chains?.context), inputs: {}, assumptions: [] },
+      successCriteria: Object.fromEntries(Object.entries(r.chains?.successCriteria ?? {}).filter(([, v]) => typeof v === 'boolean')),
+    },
+    usage: normaliseUsageModel(r.usage),
   };
 }
 

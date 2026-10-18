@@ -198,6 +198,16 @@ label.row { color: var(--text); font-size: 13px; }
 .mode-pill[data-mode='off'] { background: var(--warn-bg); color: var(--warn-text); }
 .estimate { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); background: var(--accent-soft); padding: 2px 7px; border-radius: 999px; vertical-align: middle; margin-left: 4px; }
 
+/* ---------- Usage, tree, chain intake ---------- */
+.usage-figures { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 8px 0; }
+.usage-figures strong { font-size: 15px; }
+.tree-node { cursor: pointer; border-radius: 6px; padding: 1px 4px; }
+.tree-node:hover, .tree-node:focus-visible { background: var(--accent-soft); outline: none; }
+.mindmap { overflow-x: auto; background: var(--surface-2); border-radius: 10px; padding: 6px; }
+.mindmap svg { max-width: 100%; height: auto; }
+.mindmap [data-turn] { cursor: pointer; }
+.intake label { color: var(--text); }
+
 /* ---------- Misc ---------- */
 pre { white-space: pre-wrap; word-break: break-word; background: var(--surface-2); padding: 10px 12px; border-radius: 10px; font: 12px/1.5 ui-monospace, 'Cascadia Code', Consolas, monospace; }
 progress { appearance: none; height: 8px; border: 0; border-radius: 999px; overflow: hidden; background: var(--surface-2); margin-top: 8px; }

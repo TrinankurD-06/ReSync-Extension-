@@ -1,7 +1,9 @@
 // Generate Claude Code plugin command files (commands/*.md) from the shared templates and the prompt library.
 // Command syntax facts (frontmatter, $ARGUMENTS, \$ escaping, ${CLAUDE_*} substitution): docs/VERIFIED.md.
-import { passportInstructions, treeInstructions, summaryInstructions, PASSPORT_SECTIONS } from '@resync/shared/templates';
+import { passportInstructions, treeInstructions, summaryInstructions, SUMMARY_AUDIENCES } from '@resync/shared/templates';
 import { promptText } from '@resync/shared/prompts';
+import { withSharedRules } from '@resync/shared/rules';
+import { intakeInstructions, successCriteriaDefault, successCriteriaStep, emptyChainContext } from '@resync/shared/chains';
 
 export const CORE_COMMANDS = ['passport', 'resume', 'tree', 'summary', 'prompts'];
 
@@ -33,11 +35,11 @@ export function coreCommands() {
       { description: yamlString('Write a Context Passport (handoff brief) for this session and save it to .resync/passports/'), 'argument-hint': '[title]' },
       `${GENERATED_NOTE}
 
-${passportInstructions()}
+${passportInstructions({ meta: { date: "<today's local date, YYYY-MM-DD>", project: '<the project folder name>', source: 'Claude Code session ${CLAUDE_SESSION_ID}' } })}
 
 After writing it:
 1. Save it with the Write tool to \`.resync/passports/${STAMP}-<short-title-slug>.md\` in the project root (use the current local date and time; title: $ARGUMENTS, or a short title you choose if that is empty).
-2. Start the file with \`# Context Passport: <title>\`, then the lines \`- Created: <ISO date-time>\` and \`- Session: \${CLAUDE_SESSION_ID}\`, then the ${PASSPORT_SECTIONS.length} sections.
+2. Start the file with \`# Context Passport: <title>\`, then the passport exactly as written above (Meta first).
 3. Reply with the file path and one line on how to continue: \`/resync:resume <file>\` in a new session.`,
     ),
     resume: commandFile(
@@ -68,10 +70,12 @@ Instead of replying with the JSON, do this:
 4. Reply with the mindmap it printed (in a \`\`\`mermaid block) and the two file paths.`,
     ),
     summary: commandFile(
-      { description: yamlString('Summarise this session in 5 to 10 lines and save it to .resync/summaries/') },
+      { description: yamlString('Summarise this session (a quick catch-up, not a handoff) and save it to .resync/summaries/'), 'argument-hint': '[recap|slack|memory]' },
       `${GENERATED_NOTE}
 
-${summaryInstructions()}
+Audience: $ARGUMENTS (if that is empty, use "recap"). Follow the instructions for that audience:
+
+${Object.entries(SUMMARY_AUDIENCES).map(([id, a]) => `### ${id}: ${a.label}\n\n${summaryInstructions({ audience: /** @type {any} */ (id) })}`).join('\n\n')}
 
 Also save the summary with the Write tool to \`.resync/summaries/${STAMP}.md\` in the project root (current local date and time), then reply with the summary and the file path.`,
     ),
@@ -97,9 +101,14 @@ export function promptToCommand(p) {
     );
   }
   if (p.steps.length) {
-    lines.push('Work through these steps in order. Finish each step completely (and show me its result) before starting the next.', '');
-    p.steps.forEach((s, i) => lines.push(`## Step ${i + 1}`, '', escapeDollars(s.text), ''));
-    if (p.body.trim()) lines.push(escapeDollars(p.body));
+    // No side panel in Claude Code: the model runs the intake itself and carries the chain context.
+    const success = successCriteriaDefault(p);
+    const steps = success ? [...p.steps, successCriteriaStep(emptyChainContext())] : p.steps;
+    lines.push(intakeInstructions(p, { successCriteria: success }), '');
+    lines.push('Then work through these steps in order. Finish each step completely (and show me its result) before starting the next.', '');
+    steps.forEach((s, i) => lines.push(`## Step ${i + 1}`, '', escapeDollars(s.text), ''));
+    if (p.body.trim()) lines.push(escapeDollars(p.body), '');
+    lines.push(withSharedRules('Apply these rules in every step.'));
   } else {
     lines.push(escapeDollars(promptText(p)));
   }

@@ -67,6 +67,18 @@ describe('prompts', () => {
     expect((await alice.get('/api/v1/prompts')).body.prompts).toHaveLength(1);
   });
 
+  it('keeps chain settings (intake facts, success-criteria step) with a team chain', async () => {
+    const app = makeApp();
+    const { alice, bob } = await twoInTeam(app);
+    const chain = { ...PROMPT, slug: 'launch', variables: [], body: '', steps: [{ text: 'Plan it.', waitFor: 'response', delaySeconds: 0 }], chain: { type: 'planning', intake: ['targetUser', 'teamMembers'], successCriteria: true } };
+    const id = (await alice.post('/api/v1/prompts', { prompt: chain })).body.prompt.id;
+    expect((await bob.get('/api/v1/prompts')).body.prompts.find((p) => p.slug === 'launch').chain).toEqual(chain.chain);
+    expect((await alice.post('/api/v1/prompts', { prompt: { ...chain, slug: 'bad', chain: { intake: ['nope'] } } })).status).toBe(400);
+    const { chain: _drop, ...plainPrompt } = chain;
+    await alice.put(`/api/v1/prompts/${id}`, { prompt: plainPrompt });
+    expect((await bob.get('/api/v1/prompts')).body.prompts.find((p) => p.slug === 'launch').chain).toBeUndefined();
+  });
+
   it('moves between personal and team scopes', async () => {
     const app = makeApp();
     const { alice, bob } = await twoInTeam(app);

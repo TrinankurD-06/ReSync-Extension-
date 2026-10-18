@@ -8,7 +8,7 @@ import { createLibrary } from '../lib/library.js';
 import { query } from '../lib/selectors.js';
 import { insertText } from '../lib/composer.js';
 import { createChainController, realPage, mutationWait } from './chain.js';
-import { readConversation, runInChat, takePendingInsert } from './conversation.js';
+import { readConversation, runInChat, takePendingInsert, scrollToTurn, pageMeta } from './conversation.js';
 import { createUsageTracker } from './usageTracker.js';
 import { createUsageStore } from '../lib/usageEstimates.js';
 
@@ -33,12 +33,14 @@ export const handlers = {
   'resync:chainControl': (msg) => chains.control(msg),
   'resync:chainState': () => chains.state(),
   // API mode: the side panel needs the conversation text (sent to the provider only after the user agreed).
-  'resync:readConversation': () => ({ ok: true, messages: readConversation({ overrides: settings.selectorOverrides }) }),
+  'resync:readConversation': () => ({ ok: true, messages: readConversation({ overrides: settings.selectorOverrides }), meta: pageMeta({ overrides: settings.selectorOverrides }) }),
+  // Topic tree: clicking a topic scrolls the chat to the first turn of its range.
+  'resync:scrollToTurn': (msg) => scrollToTurn(msg.turn, { overrides: settings.selectorOverrides }),
   // In-chat mode: send the instructions in this chat and return Claude's reply.
   'resync:inChat': async (msg) => {
     const mw = mutationWait();
     try {
-      return await runInChat(msg.feature, { page: realPage(() => settings.selectorOverrides), wait: mw.wait, overrides: settings.selectorOverrides });
+      return await runInChat(msg.feature, { page: realPage(() => settings.selectorOverrides), wait: mw.wait, overrides: settings.selectorOverrides, audience: msg.audience });
     } finally {
       mw.disconnect();
     }
@@ -85,7 +87,7 @@ async function start() {
   deliverPendingInsert();
 
   const usage = createUsageStore(chrome.storage.local);
-  const tracker = createUsageTracker({ add: (e) => usage.add(e), getOverrides: () => settings.selectorOverrides });
+  const tracker = createUsageTracker({ add: (e) => usage.add(e), getOverrides: () => settings.selectorOverrides, getModel: () => settings.usage, memory: usage });
   tracker.baseline();
 
   // claude.ai is a single-page app: watch for re-renders and URL changes.

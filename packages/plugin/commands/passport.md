@@ -7,6 +7,7 @@ argument-hint: [title]
 
 Write a Context Passport: a handoff brief so a fresh session (or a teammate) can continue this work without re-reading the conversation.
 Use exactly these Markdown headings, in this order, and nothing before the first heading:
+## Meta
 ## Goal
 ## Current state
 ## Decisions made (and why)
@@ -15,11 +16,23 @@ Use exactly these Markdown headings, in this order, and nothing before the first
 ## Next 3 steps
 ## Key files
 
-Rules: be specific and concrete; include names, numbers, commands and file paths. Under "Decisions made (and why)" give each decision with its reason.
-Under "Dead ends" list what was tried and did not work, and why. "Next 3 steps" is a numbered list of exactly three actions.
-Under "Key files" list paths with one line each on why they matter (write "None" if there are no files). Write "None" for any empty section.
+Under "## Meta" write exactly these lines (fill in anything in <angle brackets>):
+- Date: <today's local date, YYYY-MM-DD>
+- Project: <the project folder name>
+- Source: Claude Code session ${CLAUDE_SESSION_ID}
+
+Be specific and concrete: include the real names, numbers, commands and file paths from the conversation. Under "Decisions made (and why)" give each decision with its reason.
+Under "Dead ends" only list approaches actually tried and abandoned; otherwise write None. "Next 3 steps" is a numbered list of exactly three actions.
+Under "Key files" list every real file path with one line each on why it matters (write "None" if there are no files). Write "None" for any empty section.
+Length: at most 5 bullets per section and under 400 words in total, not counting Key files, which lists all real files.
+
+Rules for every answer:
+- Mark anything inferred or unconfirmed as (assumed).
+- Never invent file paths, names, numbers or commands. Write 'unknown' instead.
+- Never include API keys, tokens, passwords or personal contact details.
+- Exclude the current request itself from the output.
 
 After writing it:
 1. Save it with the Write tool to `.resync/passports/YYYY-MM-DD-HHMM-<short-title-slug>.md` in the project root (use the current local date and time; title: $ARGUMENTS, or a short title you choose if that is empty).
-2. Start the file with `# Context Passport: <title>`, then the lines `- Created: <ISO date-time>` and `- Session: ${CLAUDE_SESSION_ID}`, then the 7 sections.
+2. Start the file with `# Context Passport: <title>`, then the passport exactly as written above (Meta first).
 3. Reply with the file path and one line on how to continue: `/resync:resume <file>` in a new session.

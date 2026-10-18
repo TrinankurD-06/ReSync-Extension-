@@ -4,6 +4,10 @@ category: dev
 tags: [chain, planning, tests]
 description: Plan, implement, then test a feature, one step per reply.
 scope: team
+chain:
+  type: general
+  intake: []
+  successCriteria: false
 variables:
   - name: feature
     description: The feature to build

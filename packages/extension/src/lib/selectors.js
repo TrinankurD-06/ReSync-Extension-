@@ -27,7 +27,18 @@ export const SELECTORS = {
   currentProjectLink: ['header a[href^="/project/"]', 'main a[href^="/project/"]'],
   // Error or limit notices shown in the conversation.
   alert: ['[role="alert"]', '[data-testid*="error" i]'],
+  // Usage estimates. The wrapper around one turn (a message plus its attachments).
+  turnContainer: ['[data-test-render-count]', '[data-turn-key]'],
+  // Attachments shown with a user message (searched inside its turn container).
+  messageImage: ['[data-testid="file-thumbnail"] img', '[data-testid*="image" i] img', 'img[alt*="image" i]'],
+  messageFile: ['[data-testid="file-thumbnail"]:not(:has(img))', '[data-testid*="attachment" i]', '[data-testid*="file" i]:not(:has(img))'],
+  // Project page: its name and the "N% of project capacity used" note in the knowledge panel.
+  projectTitle: ['main h1', 'h1'],
+  projectKnowledge: ['[data-testid*="knowledge" i]', 'main'],
 };
+
+/** "12% of project capacity used" on a claude.ai project page. */
+export const PROJECT_CAPACITY_TEXT = /(\d+(?:\.\d+)?)\s*%\s*of\s+(?:the\s+)?project\s+(?:knowledge\s+)?capacity/i;
 
 /** Elements that must exist on a chat page for the composer features to work. */
 export const REQUIRED_ON_CHAT = ['composer'];

@@ -14,6 +14,7 @@
  *                              part of a long chat in the page, so the count can stay flat as replies arrive)
  *   findAlert(): { kind: 'limit' | 'error', text: string } | null,
  *   send(text: string): boolean,
+ *   lastReplyText?(): string,  text of the newest reply (passed on to the next step)
  * }} ChainPage
  *
  * @typedef {'idle' | 'sending' | 'waiting-reply' | 'countdown' | 'paused' | 'done' | 'stopped' | 'cancelled'} ChainStatus
@@ -41,6 +42,8 @@ export const DEFAULTS = {
  * @param {{
  *   page: ChainPage,
  *   steps: { text: string, waitFor: 'response' | 'timer', delaySeconds: number }[],
+ *   compose?: (step: { text: string }, o: { index: number, previousOutput: string }) => string,
+ *              builds the text actually sent (chain context, previous output, rules); default: the step text
  *   onState?: (s: ChainState) => void,
  *   wait?: (ms: number) => Promise<void>,
  *   now?: () => number,
@@ -56,6 +59,8 @@ export function createChainRunner(o) {
   let paused = false;
   let cancelled = false;
   let skipRequested = false;
+  /** Text of the reply to the last step that was sent. */
+  let previousOutput = '';
 
   const emit = () => o.onState?.({ ...state, sent: [...state.sent], skipped: [...state.skipped] });
   const set = (patch) => {
@@ -168,9 +173,11 @@ export function createChainRunner(o) {
       }
       set({ status: 'sending' });
       const before = replyMarker();
-      if (!o.page.send(step.text)) return stop('Could not send the message (the send button or message box is not available).');
+      const text = o.compose ? o.compose(step, { index: i, previousOutput }) : step.text;
+      if (!o.page.send(text)) return stop('Could not send the message (the send button or message box is not available).');
       set({ sent: [...state.sent, i] });
       if (!(await waitForReply(before))) return;
+      previousOutput = o.page.lastReplyText?.() ?? '';
     }
     if (!cancelled) set({ status: 'done', step: o.steps.length, countdown: 0 });
   }

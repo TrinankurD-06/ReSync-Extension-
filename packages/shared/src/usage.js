@@ -19,7 +19,11 @@ export const usageRecordSchema = z
     cacheCreationTokens: nonNeg.optional(),
     costUsd: nonNeg.optional(),
     messages: nonNeg.optional(),
-    estimatedTokens: nonNeg.optional(),
+    estimatedTokens: nonNeg.optional(), // extension: tokens the user typed (estimate)
+    // Extension: estimated tokens claude.ai processed (context re-read each turn, replies, attachments,
+    // project files, hidden instructions), as a range because much of it can't be seen from the page.
+    processedTokensLow: nonNeg.optional(),
+    processedTokensHigh: nonNeg.optional(),
     durationMs: nonNeg.optional(),
     isEstimate: z.literal(true).default(true),
   })

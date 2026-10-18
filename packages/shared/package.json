@@ -13,6 +13,8 @@
     "./tree": "./src/tree.js",
     "./usage": "./src/usage.js",
     "./templates": "./src/templates.js",
+    "./rules": "./src/rules.js",
+    "./chains": "./src/chains.js",
     "./sync": "./src/sync.js",
     "./models": "./src/featureModels.js",
     "./node/library": "./src/node/library.js"

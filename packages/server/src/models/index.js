@@ -69,6 +69,8 @@ const deviceCodeSchema = new Schema(
 deviceCodeSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 3600 });
 
 const stepSchema = new Schema({ text: String, waitFor: { type: String, enum: ['response', 'timer'] }, delaySeconds: Number }, { _id: false });
+// Optional chain settings (intake facts, success-criteria step); validated by the shared schema first.
+const chainSchema = new Schema({ type: { type: String, enum: ['planning', 'general'] }, intake: { type: [String], default: undefined }, successCriteria: Boolean }, { _id: false });
 const variableSchema = new Schema({ name: String, description: String, default: String }, { _id: false });
 const promptFields = {
   slug: { type: String, required: true },
@@ -79,6 +81,7 @@ const promptFields = {
   scope: { type: String, enum: ['personal', 'team'], required: true },
   variables: [variableSchema],
   steps: [stepSchema],
+  chain: { type: chainSchema, default: undefined },
   body: { type: String, default: '' },
 };
 const promptSchema = new Schema(
@@ -118,6 +121,7 @@ const usageSchema = new Schema(
     model: { type: String, maxlength: 200 },
     inputTokens: num, outputTokens: num, cacheReadTokens: num, cacheCreationTokens: num,
     costUsd: num, messages: num, estimatedTokens: num, durationMs: num,
+    processedTokensLow: num, processedTokensHigh: num, // extension only: estimated range
   },
   { timestamps: true },
 );

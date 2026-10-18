@@ -2,10 +2,13 @@
 // Works in Node and in the browser (no fs access here; callers pass text in).
 import YAML from 'yaml';
 import { z } from 'zod';
+import { CHAIN_FACTS } from './chains.js';
 
 /**
  * @typedef {{ name: string, description?: string, default?: string }} PromptVariable
  * @typedef {{ text: string, waitFor: 'response' | 'timer', delaySeconds: number }} PromptStep
+ * @typedef {{ type?: 'planning' | 'general', intake?: string[], successCriteria?: boolean }} ChainOptions
+ *   Optional chain settings: intake facts to check first (see chains.js), whether the success-criteria step is on.
  * @typedef {{
  *   slug: string,
  *   title: string,
@@ -15,6 +18,7 @@ import { z } from 'zod';
  *   scope: 'personal' | 'team',
  *   variables: PromptVariable[],
  *   steps: PromptStep[],
+ *   chain?: ChainOptions,
  *   body: string,
  * }} Prompt
  */
@@ -36,6 +40,14 @@ const stepSchema = z.object({
   delaySeconds: z.number().int().min(0).max(24 * 3600),
 });
 
+const chainSchema = z
+  .object({
+    type: z.enum(['planning', 'general']).optional(),
+    intake: z.array(z.enum(/** @type {[string, ...string[]]} */ (Object.keys(CHAIN_FACTS)))).max(Object.keys(CHAIN_FACTS).length).optional(),
+    successCriteria: z.boolean().optional(),
+  })
+  .strict();
+
 export const promptSchema = z
   .object({
     slug: z.string().regex(SLUG_RE, 'slug must be lowercase-kebab-case'),
@@ -46,6 +58,7 @@ export const promptSchema = z
     scope: z.enum(['personal', 'team']),
     variables: z.array(variableSchema),
     steps: z.array(stepSchema),
+    chain: chainSchema.optional(),
     body: z.string(),
   })
   .superRefine((p, ctx) => {
@@ -141,6 +154,7 @@ export function parsePrompt(markdown, opts = {}) {
     scope: meta.scope ?? 'personal',
     variables: normaliseVariables(meta.variables),
     steps: normaliseSteps(meta.steps),
+    ...(meta.chain && typeof meta.chain === 'object' ? { chain: meta.chain } : {}),
     body: body.replace(/^\r?\n/, '').replace(/\s+$/, '') + (body.trim() ? '\n' : ''),
   };
 }
@@ -196,6 +210,7 @@ export function serializePrompt(p) {
   };
   if (p.variables.length) meta.variables = p.variables.map((v) => (v.description || v.default ? v : v.name));
   if (p.steps.length) meta.steps = p.steps;
+  if (p.chain) meta.chain = p.chain;
   return `---\n${YAML.stringify(meta).trimEnd()}\n---\n\n${p.body.trimEnd()}\n`;
 }
 

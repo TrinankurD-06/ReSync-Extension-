@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { readConversation, runInChat, setPendingInsert, takePendingInsert, markdownOf } from '../src/content/conversation.js';
+import { readConversation, runInChat, setPendingInsert, takePendingInsert, markdownOf, conversationTurns, scrollToTurn, pageMeta } from '../src/content/conversation.js';
 import { createArtifacts } from '../src/lib/artifacts.js';
 import { realPage } from '../src/content/chain.js';
 import { memoryArea } from './fakeChrome.js';
@@ -42,8 +42,45 @@ describe('conversation on the page', () => {
     });
     let t = 0;
     const res = await runInChat('summary', { page: realPage(() => ({})), wait: async (ms) => void (t += ms), options: { settleMs: 500 } });
-    expect(res).toEqual({ ok: true, text: '- point one\n- point two' });
+    expect(res).toMatchObject({ ok: true, text: '- point one\n- point two', turns: 0 });
     expect(sent[0]).toMatch(/Summarise this conversation in 5 to 10 lines/);
+  });
+
+  it('counts turns from the page before sending, tells the model, and maps turns back for scrolling', async () => {
+    document.body.innerHTML = `<header><a href="/project/p1">Launch</a></header><main id="t">
+      <div data-testid="user-message">q1</div><div class="font-claude-response">a1</div>
+      <div data-testid="user-message">q2</div><div class="font-claude-response">a2</div></main>
+      <textarea placeholder="Reply"></textarea><button aria-label="Send message">Send</button>`;
+    expect(conversationTurns().map((t) => t.content)).toEqual(['q1', 'a1', 'q2', 'a2']);
+    const sent = [];
+    document.querySelector('button[aria-label="Send message"]').addEventListener('click', () => {
+      sent.push(document.querySelector('textarea').value);
+      document.getElementById('t').insertAdjacentHTML('beforeend', '<div class="font-claude-response">```json\n{}\n```</div>');
+    });
+    const res = await runInChat('tree', { page: realPage(() => ({})), wait: async () => {}, options: { settleMs: 0 }, href: 'https://claude.ai/chat/abc?x=1' });
+    expect(sent[0]).toContain('The conversation has 4 turns.'); // the request itself is not counted
+    expect(res).toMatchObject({ ok: true, turns: 4, meta: { project: 'Launch', source: 'https://claude.ai/chat/abc' } });
+
+    // Click-to-scroll: turn N is the Nth message counted the same way (the request and reply come after).
+    const scrolled = [];
+    for (const el of document.querySelectorAll('[data-testid="user-message"], .font-claude-response')) el.scrollIntoView = () => scrolled.push(el.textContent);
+    expect(scrollToTurn(3)).toEqual({ ok: true, turn: 3 });
+    expect(scrolled).toEqual(['q2']);
+    expect(scrollToTurn(99)).toEqual({ ok: true, turn: 5 }); // clamped to the last turn (Claude's reply to the request)
+    document.body.innerHTML = '';
+    expect(scrollToTurn(1).ok).toBe(false);
+  });
+
+  it('passport Meta comes from the page: date, project and chat URL', async () => {
+    document.body.innerHTML = '<header><a href="/project/p1"> Launch </a></header><main><textarea placeholder="Reply"></textarea><button aria-label="Send message">Send</button></main>';
+    expect(pageMeta({ href: 'https://claude.ai/chat/abc#x', now: new Date(2026, 9, 19) })).toEqual({ date: '2026-10-19', project: 'Launch', source: 'https://claude.ai/chat/abc' });
+    const sent = [];
+    document.querySelector('button').addEventListener('click', () => {
+      sent.push(document.querySelector('textarea').value);
+      document.querySelector('main').insertAdjacentHTML('beforeend', '<div class="font-claude-response"><h2>Goal</h2><p>x</p></div>');
+    });
+    await runInChat('passport', { page: realPage(() => ({})), wait: async () => {}, options: { settleMs: 0 }, href: 'https://claude.ai/chat/abc' });
+    expect(sent[0]).toContain('- Project: Launch\n- Source: https://claude.ai/chat/abc');
   });
 
   it('turns a rendered reply back into Markdown the shared parsers understand', async () => {

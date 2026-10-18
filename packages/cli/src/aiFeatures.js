@@ -4,7 +4,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { complete } from '@resync/shared/providers';
 import { resolveFeature } from '@resync/shared/models';
-import { buildApiRequest, parsePassport, renderPassport, parseTreeResponse, parseSummary, passportRepairPrompt } from '@resync/shared/templates';
+import { buildApiRequest, parsePassport, renderPassport, parseTreeResponse, parseSummary, passportRepairPrompt, passportLengthWarnings, summaryAudience } from '@resync/shared/templates';
 import { treeToMermaid } from '@resync/shared/tree';
 import { providerConfig } from './keys.js';
 import { findTranscript, loadTranscript } from './transcript.js';
@@ -23,6 +23,7 @@ function stamp(d) {
  *   cwd: string,
  *   transcript?: string, sessionId?: string,
  *   provider?: string, model?: string,
+ *   audience?: string,                    summary audience: recap | slack | memory
  *   out?: (s: string) => void, err?: (s: string) => void,
  *   write?: (s: string) => void,          streaming output
  *   fetch?: typeof fetch,
@@ -48,7 +49,12 @@ export async function runApiFeature(feature, o) {
   // Privacy: API mode sends the conversation text to the provider. Say so every time.
   err(`[resync] API mode: sending this conversation (${messages.length} turns from ${path.basename(file)}) to ${route.providerId} (${provider.baseUrl ?? provider.type}), model ${route.model}.`);
 
-  const req = buildApiRequest(feature, messages);
+  const audience = summaryAudience(o.audience);
+  if (feature === 'summary' && o.audience && audience !== o.audience) err(`[resync] unknown audience "${o.audience}"; using recap (choices: recap, slack, memory)`);
+  const project = path.basename(o.cwd);
+  const sessionId = path.basename(file, '.jsonl');
+  // Meta comes from ReSync (date, project, transcript), not from the model.
+  const req = buildApiRequest(feature, messages, { meta: { project, source: `Claude Code session ${sessionId}` }, audience });
   const stream = await complete({ provider, model: route.model, system: req.system, messages: /** @type {any} */ (req.messages), maxTokens: MAX_TOKENS[feature], stream: true }, { fetch: o.fetch });
   let text = '';
   for await (const delta of stream) {
@@ -75,7 +81,8 @@ export async function runApiFeature(feature, o) {
       }
       if (!p.ok) err(`[resync] warning: still missing sections: ${p.missing.join(', ')} (saved with "None")`);
     }
-    const md = renderPassport(p.sections, { createdAt: now, project: path.basename(o.cwd), source: `API mode: ${route.providerId}/${route.model}`, sessionId: path.basename(file, '.jsonl') });
+    for (const w of passportLengthWarnings(p.sections)) err(`[resync] note: over the length cap: ${w}`);
+    const md = renderPassport(p.sections, { createdAt: now, project, source: `Claude Code session ${sessionId}`, mode: `API mode: ${route.providerId}/${route.model}` });
     const dir = path.join(baseDir, 'passports');
     await fs.mkdir(dir, { recursive: true });
     const f = path.join(dir, `${stamp(now)}.md`);
@@ -84,8 +91,9 @@ export async function runApiFeature(feature, o) {
     return { file: f, usage: result.usage, ok: p.ok, missing: p.missing, text };
   }
   if (feature === 'tree') {
-    const t = parseTreeResponse(text);
+    const t = parseTreeResponse(text, { turns: messages.length });
     if (!t.ok) throw new Error(`The model's topic tree was not valid: ${t.errors.join('; ')}`);
+    for (const w of t.warnings) err(`[resync] fixed: ${w}`);
     const dir = path.join(baseDir, 'trees');
     await fs.mkdir(dir, { recursive: true });
     const base = path.join(dir, stamp(now));
@@ -96,7 +104,7 @@ export async function runApiFeature(feature, o) {
     out(`Saved topic tree: ${base}.json and ${base}.mmd`);
     return { file: `${base}.json`, usage: result.usage, ok: true };
   }
-  const s = parseSummary(text);
+  const s = parseSummary(text, { audience });
   if (s.warning) err(`[resync] note: ${s.warning}`);
   const dir = path.join(baseDir, 'summaries');
   await fs.mkdir(dir, { recursive: true });

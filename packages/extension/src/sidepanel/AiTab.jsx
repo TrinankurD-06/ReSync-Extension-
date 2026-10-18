@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { resolveFeature, ApiModeOffError } from '@resync/shared/models';
-import { buildApiRequest, parsePassport, renderPassport, parseTreeResponse, parseSummary } from '@resync/shared/templates';
+import { buildApiRequest, parsePassport, renderPassport, parseTreeResponse, parseSummary, passportLengthWarnings, SUMMARY_AUDIENCES } from '@resync/shared/templates';
 import { treeToMermaid } from '@resync/shared/tree';
+import { renderMermaid, tagMindmapNodes, turnFromEvent } from './mindmap.js';
 import { createArtifacts, ARTIFACTS_KEY } from '../lib/artifacts.js';
 import { setPendingInsert } from '../content/conversation.js';
 import { aiRun, toPage, activeClaudeTab, panelSync } from './bridge.js';
@@ -9,9 +10,9 @@ import { Icon } from './Icon.jsx';
 import Voice from './Voice.jsx';
 
 const FEATURES = [
-  ['passport', 'Context Passport', 'A handoff brief: goal, state, decisions, open questions, dead ends, next steps, key files.'],
-  ['tree', 'Topic tree', 'The topics of this chat as a collapsible tree and a Mermaid mindmap.'],
-  ['summary', 'Summary', '5 to 10 lines you can read or listen to.'],
+  ['passport', 'Context Passport', 'For handing off work: a brief a new chat or a teammate can continue from (goal, state, decisions, open questions, dead ends, next steps, key files).'],
+  ['tree', 'Topic tree', 'The topics of this chat as a collapsible tree and a mindmap. Click a topic to jump to it in the chat.'],
+  ['summary', 'Summary', 'For a quick catch-up: a few plain lines you can read or listen to. Pick who it is for.'],
 ];
 const MAX_TOKENS = { passport: 4000, tree: 3000, summary: 800 };
 
@@ -23,6 +24,9 @@ export default function AiTab({ settings, update }) {
   const [error, setError] = useState(/** @type {any} */ (null));
   const [current, setCurrent] = useState(/** @type {any} */ (null));
   const [history, setHistory] = useState([]);
+  /** A topic-tree reply that couldn't be parsed: shown raw with a Retry button. */
+  const [treeFailure, setTreeFailure] = useState(/** @type {{ raw: string, errors: string[] } | null} */ (null));
+  const audience = settings.summary.audience;
 
   useEffect(() => {
     const load = () => artifacts.list().then(setHistory);
@@ -48,20 +52,27 @@ export default function AiTab({ settings, update }) {
     }
   };
 
-  /** Turn reply text into a saved artifact. */
-  const finish = async (feature, text, mode) => {
+  /**
+   * Turn reply text into a saved artifact.
+   * @param {{ turns?: number, meta?: { date: string, project: string, source: string } }} page what ReSync read from the page
+   */
+  const finish = async (feature, text, mode, page = {}) => {
     let item;
     if (feature === 'passport') {
       const p = parsePassport(text);
-      const content = renderPassport(p.sections, { title: (await activeClaudeTab())?.title?.replace(/ - Claude$/, ''), source: mode });
-      item = { kind: 'passport', title: 'Context Passport', content, mode, data: { missing: p.missing } };
+      // Meta comes from the page (date, project, chat URL), not from the model.
+      const content = renderPassport(p.sections, { title: (await activeClaudeTab())?.title?.replace(/ - Claude$/, ''), project: page.meta?.project, source: page.meta?.source, mode });
+      item = { kind: 'passport', title: 'Context Passport', content, mode, data: { missing: p.missing, warnings: passportLengthWarnings(p.sections) } };
     } else if (feature === 'tree') {
-      const t = parseTreeResponse(text);
-      if (!t.ok) throw new Error(`The topic tree was not valid JSON: ${t.errors.join('; ')}`);
-      item = { kind: 'tree', title: t.tree.topic, content: treeToMermaid(t.tree), data: t.tree, mode };
+      const t = parseTreeResponse(text, { turns: page.turns });
+      if (!t.ok) {
+        setTreeFailure({ raw: t.raw, errors: t.errors });
+        return;
+      }
+      item = { kind: 'tree', title: t.tree.topic, content: treeToMermaid(t.tree), data: { tree: t.tree, warnings: t.warnings, turns: page.turns }, mode };
     } else {
-      const s = parseSummary(text);
-      item = { kind: 'summary', title: s.lines[0]?.slice(0, 60) ?? 'Summary', content: s.lines.join('\n'), mode };
+      const s = parseSummary(text, { audience });
+      item = { kind: 'summary', title: s.lines[0]?.slice(0, 60) ?? 'Summary', content: s.lines.join('\n'), mode, data: { audience } };
     }
     setCurrent(await artifacts.add(item));
   };
@@ -70,19 +81,20 @@ export default function AiTab({ settings, update }) {
     setError(null);
     setStream('');
     setCurrent(null);
+    setTreeFailure(null);
     setBusy(feature);
     try {
       const route = resolveFeature(settings.ai, feature); // throws a readable ApiModeOffError if misconfigured
       if (route.mode === 'in-chat') {
-        const r = await toPage({ type: 'resync:inChat', feature });
+        const r = await toPage({ type: 'resync:inChat', feature, audience });
         if (!r?.ok) throw new Error(r?.error ?? 'In-chat run failed.');
-        await finish(feature, r.text, 'in-chat');
+        await finish(feature, r.text, 'in-chat', { turns: r.turns, meta: r.meta });
         return;
       }
       const conv = await toPage({ type: 'resync:readConversation' });
       if (!conv?.ok) throw new Error(conv?.error ?? 'Could not read the conversation.');
       if (!conv.messages.length) throw new Error('This chat has no messages yet.');
-      const req = buildApiRequest(feature, conv.messages);
+      const req = buildApiRequest(feature, conv.messages, { meta: conv.meta, audience });
       const r = await aiRun({ feature, system: req.system, messages: req.messages, maxTokens: MAX_TOKENS[feature] }, (d) => setStream((s) => s + d));
       if (!r.ok) {
         if (r.error.kind === 'needs_ack' && retry === 0) {
@@ -96,7 +108,7 @@ export default function AiTab({ settings, update }) {
         setError({ ...r.error, feature });
         return;
       }
-      await finish(feature, r.text, `api: ${r.providerId}/${r.model}`);
+      await finish(feature, r.text, `api: ${r.providerId}/${r.model}`, { turns: conv.messages.length, meta: conv.meta });
     } catch (e) {
       setError({ kind: 'error', message: e.message });
     } finally {
@@ -126,6 +138,14 @@ export default function AiTab({ settings, update }) {
             <button className="primary" disabled={Boolean(busy)} onClick={() => run(id)}>{busy === id ? 'Working...' : 'Run'}</button>
           </div>
           <div className="small muted" style={{ marginTop: 6 }}>{desc}</div>
+          {id === 'summary' && (
+            <div className="row" style={{ marginTop: 6 }}>
+              <label htmlFor="audience">For</label>
+              <select id="audience" value={audience} onChange={(e) => update((s) => { s.summary.audience = e.target.value; })}>
+                {Object.entries(SUMMARY_AUDIENCES).map(([k, a]) => <option key={k} value={k}>{a.label}</option>)}
+              </select>
+            </div>
+          )}
           <span className="mode-pill" data-mode={modeKind(id)}>{modeLabel(id)}</span>
         </section>
       ))}
@@ -136,6 +156,13 @@ export default function AiTab({ settings, update }) {
           {error.message}
           {error.hint && <div className="small">{error.hint}</div>}
           {error.kind === 'needs_permission' && <div><button className="primary" onClick={() => allow(error.origins, error.feature)}>Allow</button></div>}
+        </div>
+      )}
+      {treeFailure && (
+        <div className="banner" data-testid="tree-failure">
+          ReSync couldn't read the topic tree from the reply: {treeFailure.errors.join('; ')}. Here is the raw reply:
+          <pre>{treeFailure.raw}</pre>
+          <button className="primary" disabled={Boolean(busy)} onClick={() => run('tree')}>Retry</button>
         </div>
       )}
       {current && <ArtifactView item={current} onNewChat={newChatWithPassport} settings={settings} />}
@@ -190,6 +217,7 @@ function ArtifactView({ item, onNewChat, settings }) {
       {item.kind === 'passport' && (
         <>
           {item.data?.missing?.length > 0 && <p className="banner small">Missing sections: {item.data.missing.join(', ')} (saved as "None").</p>}
+          {item.data?.warnings?.length > 0 && <p className="banner small">Longer than the cap: {item.data.warnings.join('; ')}.</p>}
           <pre>{item.content}</pre>
           <div className="row">
             <button className="primary" onClick={() => onNewChat(item.content)}>New chat with passport</button>
@@ -201,13 +229,18 @@ function ArtifactView({ item, onNewChat, settings }) {
         <>
           <div className="row">
             <button className={view === 'tree' ? 'primary' : 'secondary'} onClick={() => setView('tree')}>Tree</button>
-            <button className={view === 'mermaid' ? 'primary' : 'secondary'} onClick={() => setView('mermaid')}>Mermaid</button>
+            <button className={view === 'mermaid' ? 'primary' : 'secondary'} onClick={() => setView('mermaid')}>Mindmap</button>
           </div>
-          {view === 'tree' ? <TreeNode node={item.data} open /> : (
+          {treeWarnings(item).length > 0 && (
+            <details className="small" data-testid="tree-warnings">
+              <summary>ReSync fixed {treeWarnings(item).length} problem(s) in the tree</summary>
+              <ul>{treeWarnings(item).map((w, i) => <li key={i}>{w}</li>)}</ul>
+            </details>
+          )}
+          {view === 'tree' ? <TreeNode node={treeOf(item)} open /> : (
             <>
-              <pre>{item.content}</pre>
-              <button className="secondary" onClick={() => copy(item.content)}>Copy Mermaid</button>
-              <p className="small muted">Paste into any Mermaid viewer (for example mermaid.live) or a Markdown file to see the mindmap.</p>
+              <Mindmap tree={treeOf(item)} source={item.content} />
+              <button className="secondary" onClick={() => copy(item.content)}>Copy Mermaid source</button>
             </>
           )}
         </>
@@ -223,9 +256,57 @@ function ArtifactView({ item, onNewChat, settings }) {
   );
 }
 
-/** Collapsible topic tree. @param {{ node: import('@resync/shared/tree').TopicNode, open?: boolean }} props */
+/** Saved trees: { tree, warnings } now; older ones stored the tree itself. */
+const treeOf = (item) => item.data?.tree ?? item.data;
+const treeWarnings = (item) => item.data?.warnings ?? [];
+
+/** Scroll the chat to a turn (the page counts turns the same way it did for the prompt). */
+const goToTurn = (turn) => toPage({ type: 'resync:scrollToTurn', turn });
+
+/** The mindmap, rendered from the same JSON with the bundled Mermaid; click a node to jump to its turn. */
+function Mindmap({ tree, source }) {
+  const ref = useRef(/** @type {HTMLDivElement | null} */ (null));
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let live = true;
+    setError('');
+    renderMermaid(source)
+      .then((svg) => {
+        if (!live || !ref.current) return;
+        ref.current.innerHTML = svg;
+        tagMindmapNodes(ref.current, tree);
+      })
+      .catch((e) => live && setError(e.message));
+    return () => {
+      live = false;
+    };
+  }, [tree, source]);
+  const onActivate = (e) => {
+    if (e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ') return;
+    const turn = turnFromEvent(e.target);
+    if (turn) goToTurn(turn);
+  };
+  return (
+    <>
+      {error && <p className="banner small">Couldn't draw the mindmap ({error}). The Mermaid source is below.</p>}
+      <div ref={ref} className="mindmap" data-testid="mindmap" onClick={onActivate} onKeyDown={onActivate} />
+      {error && <pre>{source}</pre>}
+    </>
+  );
+}
+
+/** Collapsible topic tree; clicking a topic scrolls the chat to it. @param {{ node: import('@resync/shared/tree').TopicNode, open?: boolean }} props */
 function TreeNode({ node, open = false }) {
-  const label = <>{node.topic} <span className="small muted">turns {node.turnRange[0]}-{node.turnRange[1]}</span></>;
+  const go = (e) => {
+    e.preventDefault(); // inside <summary>, don't also toggle
+    goToTurn(node.turnRange[0]);
+  };
+  const label = (
+    <>
+      <span className="tree-node" role="button" tabIndex={0} data-turn={node.turnRange[0]} title={`Go to turn ${node.turnRange[0]}`} onClick={go} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && go(e)}>{node.topic}</span>{' '}
+      <span className="small muted">turns {node.turnRange[0]}-{node.turnRange[1]}</span>
+    </>
+  );
   if (!node.children.length) return <div style={{ paddingLeft: 14 }}>{label}</div>;
   return (
     <details open={open} style={{ paddingLeft: 6 }}>

@@ -3,6 +3,8 @@ import { useApi } from '../useApi.js';
 
 const fmt = (n) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(2)}M` : n >= 10_000 ? `${(n / 1000).toFixed(1)}k` : String(Math.round(n)));
 const money = (n) => (n ? `$${n.toFixed(2)}` : '-');
+/** Browser-extension range of tokens claude.ai processed (estimate); '-' when there is none. */
+const range = (r) => (r?.high ? (fmt(r.low) === fmt(r.high) ? fmt(r.low) : `${fmt(r.low)} to ${fmt(r.high)}`) : '-');
 const SOURCE = { plugin: 'Claude Code', queue: 'Work queue', cli: 'CLI', extension: 'Browser extension' };
 
 /** Local calendar date n days ago (usage records use local dates, not UTC). */
@@ -29,6 +31,7 @@ export default function Usage({ me }) {
         Tokens and cost recorded by Claude Code sessions, queued tasks and the browser extension{me.team ? ` across ${me.team.name}` : ''}.
         These are estimates of what was used, not a view of plan limits. Only numbers are stored, never content.
       </p>
+      <p className="muted small">For the browser extension, "Tokens" counts what people typed. "Processed (range)" estimates what claude.ai actually read each turn (the whole chat again, replies, files, images, hidden instructions): claude.ai doesn't show real token counts, so these are approximations.</p>
       <div className="row">
         <label htmlFor="days" style={{ margin: 0 }}>Period</label>
         <select id="days" value={days} onChange={(e) => setDays(Number(e.target.value))}>
@@ -42,20 +45,20 @@ export default function Usage({ me }) {
 
       <h2>Per user <span className="estimate">estimate</span></h2>
       <table aria-label="Usage per user">
-        <thead><tr><th>User</th><th>Sources</th><th className="num">Tokens (est.)</th><th className="num">Messages</th><th className="num">Cost (est.)</th></tr></thead>
+        <thead><tr><th>User</th><th>Sources</th><th className="num">Tokens (est.)</th><th className="num">Processed (range)</th><th className="num">Messages</th><th className="num">Cost (est.)</th></tr></thead>
         <tbody>
           {(byUser.data?.rows ?? []).map((r) => (
-            <tr key={r.userId}><td>{r.userName}</td><td>{r.sources.map((s) => <span className="tag" key={s}>{SOURCE[s] ?? s}</span>)}</td><td className="num">{fmt(r.tokens)}</td><td className="num">{r.messages || '-'}</td><td className="num">{money(r.costUsd)}</td></tr>
+            <tr key={r.userId}><td>{r.userName}</td><td>{r.sources.map((s) => <span className="tag" key={s}>{SOURCE[s] ?? s}</span>)}</td><td className="num">{fmt(r.tokens)}</td><td className="num">{range(r.processedTokens)}</td><td className="num">{r.messages || '-'}</td><td className="num">{money(r.costUsd)}</td></tr>
           ))}
-          {byUser.data?.rows.length === 0 && <tr><td colSpan={5} className="muted">No usage yet. Run <code>resync sync</code> or sign in from the extension to upload numbers.</td></tr>}
+          {byUser.data?.rows.length === 0 && <tr><td colSpan={6} className="muted">No usage yet. Run <code>resync sync</code> or sign in from the extension to upload numbers.</td></tr>}
         </tbody>
       </table>
 
       <h2>Per project <span className="estimate">estimate</span></h2>
       <table aria-label="Usage per project">
-        <thead><tr><th>Project</th><th className="num">Tokens (est.)</th><th className="num">Messages</th><th className="num">Cost (est.)</th></tr></thead>
+        <thead><tr><th>Project</th><th className="num">Tokens (est.)</th><th className="num">Processed (range)</th><th className="num">Messages</th><th className="num">Cost (est.)</th></tr></thead>
         <tbody>
-          {(byProject.data?.rows ?? []).map((r) => <tr key={r.project}><td>{r.project}</td><td className="num">{fmt(r.tokens)}</td><td className="num">{r.messages || '-'}</td><td className="num">{money(r.costUsd)}</td></tr>)}
+          {(byProject.data?.rows ?? []).map((r) => <tr key={r.project}><td>{r.project}</td><td className="num">{fmt(r.tokens)}</td><td className="num">{range(r.processedTokens)}</td><td className="num">{r.messages || '-'}</td><td className="num">{money(r.costUsd)}</td></tr>)}
         </tbody>
       </table>
 

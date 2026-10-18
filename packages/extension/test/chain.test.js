@@ -1,6 +1,8 @@
 // The chain controller on a DOM page (happy-dom): real selectors, composer and MutationObserver wait.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createChainController, realPage, mutationWait } from '../src/content/chain.js';
+import { mergeChainContext, chainContextBlock } from '@resync/shared/chains';
+import { hasSharedRules } from '@resync/shared/rules';
 
 beforeEach(() => {
   document.body.innerHTML = '<main id="thread"></main><textarea placeholder="Reply"></textarea><button aria-label="Send message">Send</button>';
@@ -80,6 +82,24 @@ describe('chain on a page', () => {
     expect(updates.some((u) => u.status === 'countdown')).toBe(true);
     expect(ctl.state().state.status).toBe('done');
   }, 20_000);
+
+  it('sends every step with the chain context, the previous reply and the shared rules', async () => {
+    const sent = fakeClaude();
+    const updates = [];
+    const ctl = createChainController({ getOverrides: () => ({}), broadcast: (m) => updates.push(m.state) });
+    const context = mergeChainContext({ inputs: { product: 'ReSync' }, budget: '₹0', teamMembers: [{ name: 'Asha', role: 'founder' }] });
+    ctl.start({ steps: ['Position it.', 'Pick channels.', 'Calendar with owner.'].map((text) => ({ text, waitFor: 'response', delaySeconds: 0 })), context });
+    for (let i = 0; i < 100 && updates.at(-1)?.status !== 'done'; i++) await new Promise((r) => setTimeout(r, 100));
+    expect(updates.at(-1)).toMatchObject({ status: 'done' });
+    expect(sent).toHaveLength(3);
+    for (const [i, text] of sent.entries()) {
+      expect(text).toContain(chainContextBlock(context));
+      expect(hasSharedRules(text)).toBe(true);
+      if (i > 0) expect(text).toContain(`Previous step's output:\n"""\nReply to: ${sent[i - 1]}\n"""`);
+    }
+    expect(sent[0]).not.toContain("Previous step's output");
+    expect(sent[2]).toContain('Owners must be people from the team: Asha (founder).');
+  }, 15_000);
 
   it('finishes a chain when the page keeps only the newest replies (virtualised transcript)', async () => {
     // Regression (real claude.ai, 2026-10-17): the reply count stays flat in a long chat, so a count-based

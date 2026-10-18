@@ -257,6 +257,7 @@ export function buildProgram(io = {}) {
       .option('--session <id>', 'session id (default: newest session for this folder)')
       .option('--provider <id>')
       .option('--model <model>')
+      .option('--audience <audience>', 'summary only: recap (default) | slack | memory')
       .action(async (o) => {
         if (!o.api) {
           out(`In-chat mode (the default, no API key needed): run /resync:${feature} inside Claude Code.\nAPI mode: resync ${feature} --api [--provider <id>] [--model <model>]`);
@@ -264,7 +265,7 @@ export function buildProgram(io = {}) {
         }
         const cfg = await loadConfig();
         try {
-          await runApiFeature(feature, { config: cfg, cwd: cwd(), transcript: o.transcript && path.resolve(cwd(), o.transcript), sessionId: o.session, provider: o.provider, model: o.model, out, err, write, fetch: io.fetch });
+          await runApiFeature(feature, { config: cfg, cwd: cwd(), transcript: o.transcript && path.resolve(cwd(), o.transcript), sessionId: o.session, provider: o.provider, model: o.model, audience: o.audience, out, err, write, fetch: io.fetch });
         } catch (e) {
           if (e instanceof ApiModeOffError) {
             err(e.message);

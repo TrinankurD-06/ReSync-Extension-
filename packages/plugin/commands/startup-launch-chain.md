@@ -11,7 +11,12 @@ If a value is missing and has no default, ask me for it before starting.
 
 ---
 
-Work through these steps in order. Finish each step completely (and show me its result) before starting the next.
+Before step 1 (intake): check that you know these facts: core feature, target user, key differentiator, team, primary success metric.
+If anything is missing from what I gave you, ask me at most 3 short questions in one message (the ones that matter most for this chain) and wait for my answer. If I skip, continue and record your assumptions, marked (assumed).
+Keep these facts as the chain context (product facts, budget, team size, team members with roles, deadline, primary success metric, assumptions) and use them in every step, together with the previous step's output. Never ask again for anything already in the chain context.
+If a step asks for a field the chain context cannot fill (for example an owner with no team names), relabel it (owner role) or leave it out. Never output placeholders.
+
+Then work through these steps in order. Finish each step completely (and show me its result) before starting the next.
 
 ## Step 1
 
@@ -24,3 +29,15 @@ Based on that positioning, pick the 3 launch channels most likely to work for us
 ## Step 3
 
 Turn this into a 7-day launch calendar as a table with day, channel, action and owner.
+
+## Step 4
+
+Add success criteria to the plan from the previous step: give every item (for a calendar, every day) one measurable target. Tie each target to the primary success metric (unknown: pick one that fits the plan and mark it (assumed)). Each target is a number with a unit and a time frame (for example "50 sign-ups by Day 3"), and together the targets should add up to the primary metric where that makes sense. Keep the same table and add a "Target" column.
+
+Apply these rules in every step.
+
+Rules for every answer:
+- Mark anything inferred or unconfirmed as (assumed).
+- Never invent file paths, names, numbers or commands. Write 'unknown' instead.
+- Never include API keys, tokens, passwords or personal contact details.
+- Exclude the current request itself from the output.

@@ -2,8 +2,10 @@
 // the page: selectors for streaming/replies/alerts, the composer for sending, and a MutationObserver so it
 // reacts as soon as the streaming indicator changes (polling is only a fallback cap).
 import { createChainRunner } from '../lib/chainRunner.js';
+import { composeChainStep, mergeChainContext } from '@resync/shared/chains';
 import { query, queryAll, isStreaming, findAlert, messageKey } from '../lib/selectors.js';
 import { insertText, submit } from '../lib/composer.js';
+import { markdownOf } from './conversation.js';
 
 /**
  * @param {() => Record<string, string[]>} getOverrides
@@ -20,6 +22,10 @@ export function realPage(getOverrides) {
       return el ? messageKey(el) : null;
     },
     findAlert: () => findAlert(o()),
+    lastReplyText: () => {
+      const el = queryAll('assistantMessage', o()).at(-1);
+      return el ? markdownOf(el) : '';
+    },
     send(text) {
       const c = query('composer', o());
       if (!c) return false;
@@ -50,6 +56,9 @@ export function mutationWait(target = document.body) {
   return { wait, disconnect: () => observer.disconnect() };
 }
 
+/** @param {import('@resync/shared/chains').ChainContext} context */
+const stepComposer = (context) => (step, c) => composeChainStep(step, { context, previousOutput: c.previousOutput, index: c.index });
+
 /**
  * One chain at a time per tab. Broadcasts progress as 'resync:chainUpdate' messages.
  * @param {{ getOverrides: () => Record<string, string[]>, broadcast?: (msg: unknown) => void, page?: import('../lib/chainRunner.js').ChainPage, wait?: (ms: number) => Promise<void> }} o
@@ -62,7 +71,11 @@ export function createChainController(o) {
   let title = '';
 
   return {
-    /** @param {{ title?: string, steps: { text: string, waitFor: 'response' | 'timer', delaySeconds: number }[] }} msg */
+    /**
+     * @param {{ title?: string, steps: { text: string, waitFor: 'response' | 'timer', delaySeconds: number }[], context?: import('@resync/shared/chains').ChainContext }} msg
+     *   context: the chain context from the intake; when present, every step is sent with it, the previous
+     *   step's output and the shared rules.
+     */
     start(msg) {
       if (runner && !['done', 'stopped', 'cancelled'].includes(runner.state.status)) {
         return { ok: false, error: 'A chain is already running in this tab. Cancel it first.' };
@@ -72,6 +85,7 @@ export function createChainController(o) {
       runner = createChainRunner({
         page: o.page ?? realPage(o.getOverrides),
         steps: msg.steps,
+        compose: msg.context ? stepComposer(mergeChainContext(msg.context)) : undefined,
         wait: o.wait ?? mw.wait,
         onState: (s) => {
           last = { ...s, title, paused: runner?.paused ?? false };

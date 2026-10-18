@@ -118,6 +118,11 @@ test('ReSync extension end to end', async () => {
       await panel.getByLabel('Search prompts').fill('launch plan');
       await panel.getByRole('button', { name: /Run chain/ }).click();
       await panel.getByLabel('product').fill('ReSync, a prompt toolkit');
+      await panel.getByRole('button', { name: 'Next' }).click();
+      // Intake: at most 3 questions for facts the chain needs; one answered, the rest left for assumptions.
+      const intake = panel.getByTestId('chain-intake');
+      await expect(intake.locator('input:not([type=checkbox])')).toHaveCount(3);
+      await panel.getByLabel('Who is the target user?').fill('indie developers who use Claude daily');
       await panel.getByRole('button', { name: 'Start chain' }).click();
       // Step 2 is a timer step: pause during its countdown.
       await expect(panel.getByText('Waiting before the next step')).toBeVisible({ timeout: 20_000 });
@@ -130,7 +135,14 @@ test('ReSync extension end to end', async () => {
       // exact: the tab's description also contains the word "finished"
       await expect(panel.getByText('Finished', { exact: true })).toBeVisible({ timeout: 120_000 });
       const sent = await claude.evaluate(() => window.sentMessages);
-      expect(sent.filter((m) => /positioning|launch channels|launch calendar/i.test(m))).toHaveLength(3);
+      // 3 steps plus the success-criteria step; each carries the chain context, and later ones the previous reply.
+      const chain = sent.filter((m) => m.includes('Chain context (collected by ReSync'));
+      expect(chain).toHaveLength(4);
+      for (const m of chain) expect(m).toContain('- Target user: indie developers who use Claude daily');
+      expect(chain[0]).toContain('Key differentiator was not given');
+      expect(chain[1]).toContain("Previous step's output:");
+      expect(chain[2]).toContain('owner role'); // no team names known: relabelled, not invented
+      expect(chain[3]).toContain('Add success criteria');
     });
 
     await test.step('passport and tree in-chat mode', async () => {
@@ -139,18 +151,36 @@ test('ReSync extension end to end', async () => {
       await expect(panel.getByRole('button', { name: 'New chat with passport' })).toBeVisible({ timeout: 30_000 });
       await expect(panel.locator('pre').first()).toContainText('## Next 3 steps');
       await expect(panel.locator('pre').first()).toContainText('Next 3 steps for the pricing page.');
+      // Meta comes from the page, not the model.
+      await expect(panel.locator('pre').first()).toContainText('- Project: Launch site');
+      await expect(panel.locator('pre').first()).toContainText('- Source: https://claude.ai/chat/c1');
       await panel.locator('section.card', { hasText: 'Topic tree' }).getByRole('button', { name: 'Run' }).click();
       await expect(panel.getByRole('heading', { name: 'Topic tree: Pricing chat' })).toBeVisible({ timeout: 30_000 });
-      await expect(panel.getByText('Discounts')).toBeVisible();
-      await panel.getByRole('button', { name: 'Mermaid' }).click();
-      await expect(panel.locator('pre')).toContainText('mindmap');
+      await expect(panel.locator('.tree-node', { hasText: 'Discounts' })).toBeVisible();
+      // The mock reply covers turns 1-4 of a longer chat: ReSync stretched the last topic and said so.
+      await expect(panel.getByTestId('tree-warnings')).toContainText('fixed');
+      // Turn counts come from the page, and the tree was told how many there are.
+      const asked = (await claude.evaluate(() => window.sentMessages)).find((m) => m.includes('topic tree'));
+      expect(asked).toMatch(/The conversation has \d+ turns\./);
+      // Click a topic: the chat scrolls to the first turn of its range (Discounts starts at turn 3).
+      const topOfTurn3 = () => claude.evaluate(() => document.querySelectorAll('#thread > div')[2].getBoundingClientRect().top);
+      await panel.locator('.tree-node', { hasText: 'Discounts' }).click();
+      await expect.poll(topOfTurn3, { timeout: 5000 }).toBeLessThan(5);
+      await claude.evaluate(() => window.scrollTo(0, 0));
+      // The mindmap is drawn in the panel by the bundled Mermaid, from the same JSON; its nodes are clickable too.
+      await panel.getByRole('button', { name: 'Mindmap' }).click();
+      const node = panel.getByTestId('mindmap').locator('[data-turn="3"]');
+      await expect(node).toBeVisible({ timeout: 15_000 });
+      await expect(panel.getByTestId('mindmap').locator('svg')).toBeVisible();
+      await node.click();
+      await expect.poll(topOfTurn3, { timeout: 5000 }).toBeLessThan(5);
     });
 
     await test.step('passport and tree in API mode (mock OpenAI-compatible provider)', async () => {
       await tab('Settings');
       await panel.getByText('Add a provider').click();
       await panel.getByLabel('Type').selectOption('openai-compatible');
-      await panel.getByLabel('Name').fill('mock');
+      await panel.getByLabel('Name', { exact: true }).fill('mock');
       await panel.getByLabel(/^Base URL/).fill(`http://127.0.0.1:${provider.port}/v1`);
       await panel.getByLabel('Default model').fill('mock-model');
       await panel.getByRole('button', { name: 'Add provider' }).click();
@@ -186,7 +216,12 @@ test('ReSync extension end to end', async () => {
 
     await test.step('the usage chart shows', async () => {
       await tab('Usage');
-      await expect(panel.getByRole('img', { name: /Estimated tokens per day/ })).toBeVisible();
+      await expect(panel.getByRole('img', { name: /Estimated tokens processed per day/ })).toBeVisible();
+      await expect(panel.getByText("claude.ai doesn't show real token counts, so these are approximations.", { exact: false })).toBeVisible();
+      // Both figures: what you typed, and the (much larger) range claude.ai processed.
+      const typed = Number((await panel.getByTestId('usage-typed').innerText()).match(/[\d.]+/)[0]);
+      await expect(panel.getByTestId('usage-processed')).toContainText(' to ');
+      expect(typed).toBeGreaterThan(0);
       await expect(panel.getByText('Last 7 days')).toBeVisible();
       await expect(panel.locator('.estimate').first()).toHaveText('estimate');
       await expect(panel.getByText('Launch site')).toBeVisible(); // per-project row from the header project link

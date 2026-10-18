@@ -61,14 +61,15 @@ describe('extension sync', () => {
     expect((await ext.area.get(TOKEN_KEY))[TOKEN_KEY]).toMatch(/^rlp_/);
 
     await ext.settings.update((s) => { s.colours.assignments = { 'project:p1': 'growth' }; });
-    await ext.usage.add({ project: 'Launch', messages: 3, tokens: 900 });
+    await ext.usage.add({ project: 'Launch', messages: 3, typedTokens: 900, processed: { low: 12000, high: 70000 } });
     const r = await ext.sync.syncNow();
     expect(r).toMatchObject({ ok: true, pulled: 1, colours: 'pushed', usage: 1 });
     const slugs = (await ext.library.list()).map((p) => p.slug).sort();
     expect(slugs).toEqual(['local-seed', 'standup']); // seed stays local, team prompt pulled
     expect((await alice.get('/api/v1/colours')).body.assignments).toEqual({ 'project:p1': 'growth' });
     const usage = (await alice.get('/api/v1/usage?groupBy=user')).body.rows[0];
-    expect(usage).toMatchObject({ userName: 'Alice', tokens: 900, messages: 3, sources: ['extension'] });
+    // Both figures sync (numbers only): typed tokens and the processed range.
+    expect(usage).toMatchObject({ userName: 'Alice', tokens: 900, processedTokens: { low: 12000, high: 70000 }, messages: 3, sources: ['extension'] });
     expect((await ext.area.get(STATUS_KEY))[STATUS_KEY]).toMatchObject({ ok: true });
     // Seeds were never pushed to the team library.
     expect((await alice.get('/api/v1/prompts')).body.prompts.map((p) => p.slug)).toEqual(['standup']);

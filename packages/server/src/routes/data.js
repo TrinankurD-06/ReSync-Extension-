@@ -57,6 +57,8 @@ export function dataRoutes() {
           tokens: { $sum: tokenSum },
           costUsd: { $sum: { $ifNull: ['$costUsd', 0] } },
           messages: { $sum: { $ifNull: ['$messages', 0] } },
+          processedLow: { $sum: { $ifNull: ['$processedTokensLow', 0] } },
+          processedHigh: { $sum: { $ifNull: ['$processedTokensHigh', 0] } },
           records: { $sum: 1 },
           sources: { $addToSet: '$source' },
         },
@@ -72,7 +74,7 @@ export function dataRoutes() {
         ...(x._id.project ? { project: x._id.project } : {}),
         ...(x._id.date ? { date: x._id.date } : {}),
         ...(x._id.source ? { source: x._id.source } : {}),
-        tokens: x.tokens, costUsd: Math.round(x.costUsd * 10_000) / 10_000, messages: x.messages, records: x.records, sources: x.sources.sort(),
+        tokens: x.tokens, costUsd: Math.round(x.costUsd * 10_000) / 10_000, messages: x.messages, processedTokens: { low: x.processedLow, high: x.processedHigh }, records: x.records, sources: x.sources.sort(),
       })),
     });
   });

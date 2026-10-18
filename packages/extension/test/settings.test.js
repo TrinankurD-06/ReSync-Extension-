@@ -36,4 +36,17 @@ describe('extension settings', () => {
     expect(s.voice.rate).toBe(1.5);
     expect(normaliseSettings(null)).toEqual(defaultSettings());
   });
+
+  it('keeps summary audience, chain context (reusable facts only) and the usage model, cleaning bad values', () => {
+    const s = normaliseSettings({
+      summary: { audience: 'slack' },
+      chains: { context: { budget: '₹0', teamMembers: [{ name: 'Asha', role: 'founder' }], inputs: { product: 'x' }, assumptions: ['y'] }, successCriteria: { 'launch-chain': false, bad: 'no' } },
+      usage: { hiddenTokens: { low: 1000, high: 9000 } },
+    });
+    expect(s.summary.audience).toBe('slack');
+    expect(s.chains.context).toMatchObject({ budget: '₹0', teamMembers: [{ name: 'Asha', role: 'founder' }], inputs: {}, assumptions: [] });
+    expect(s.chains.successCriteria).toEqual({ 'launch-chain': false });
+    expect(s.usage.hiddenTokens).toEqual({ low: 1000, high: 9000 });
+    expect(normaliseSettings({ summary: { audience: 'nope' } }).summary.audience).toBe('recap');
+  });
 });

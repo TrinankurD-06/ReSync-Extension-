@@ -47,7 +47,7 @@ function App() {
       </header>
       <main key={tab} className="view">
         {tab === 'prompts' && <PromptsTab onRunChain={(p) => { setChainPrompt(p); setTab('chain'); }} />}
-        {tab === 'chain' && <ChainTab prompt={chainPrompt} />}
+        {tab === 'chain' && <ChainTab prompt={chainPrompt} settings={settings} update={update} />}
         {tab === 'ai' && <AiTab settings={settings} update={update} />}
         {tab === 'usage' && <UsageTab />}
         {tab === 'colours' && <ColoursTab settings={settings} update={update} />}

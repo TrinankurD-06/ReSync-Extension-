@@ -81,12 +81,12 @@ test('two teammates: team prompt, devices, usage per user, and every page render
     const aliceCli = await connectDevice(alice, 'resync CLI on Alice laptop');
     const bobExt = await connectDevice(bob, 'ReSync extension');
     await uploadUsage(aliceCli, [{ user: 'alice', project: 'resync', sessionId: 's1', date: day, source: 'plugin', inputTokens: 12000, outputTokens: 3000, costUsd: 0.75 }]);
-    await uploadUsage(bobExt, [{ user: 'bob', project: 'Launch', sessionId: `ext:${day}:Launch`, date: day, source: 'extension', messages: 6, estimatedTokens: 2400 }]);
+    await uploadUsage(bobExt, [{ user: 'bob', project: 'Launch', sessionId: `ext:${day}:Launch`, date: day, source: 'extension', messages: 6, estimatedTokens: 2400, processedTokensLow: 30000, processedTokensHigh: 90000 }]);
 
     await alice.getByRole('link', { name: 'Usage' }).click();
     const perUser = alice.getByRole('table', { name: 'Usage per user' });
     await expect(perUser.getByRole('row', { name: /alice.*Claude Code.*15\.0k/ })).toBeVisible();
-    await expect(perUser.getByRole('row', { name: /bob.*Browser extension.*2400/ })).toBeVisible();
+    await expect(perUser.getByRole('row', { name: /bob.*Browser extension.*2400.*30.0k to 90.0k/ })).toBeVisible(); // typed + processed range
     await expect(alice.locator('.estimate').first()).toHaveText('estimate');
     await expect(alice.getByRole('table', { name: 'Usage per project' })).toContainText('Launch');
   });

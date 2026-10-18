@@ -4,6 +4,8 @@ export * from './tokens.js';
 export * from './tree.js';
 export * from './usage.js';
 export * from './templates.js';
+export * from './rules.js';
+export * from './chains.js';
 export * from './featureModels.js';
 export * from './sync.js';
 export * as providers from './providers/index.js';
