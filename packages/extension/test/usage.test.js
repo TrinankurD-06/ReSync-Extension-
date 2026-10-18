@@ -106,8 +106,8 @@ describe('estimated tokens processed', () => {
   });
 
   it('cleans bad settings back to defaults', () => {
-    const m = normaliseUsageModel({ imageTokens: { low: 'x', high: 900 }, hiddenTokens: { low: 9, high: 3 }, projectFiles: { '': 5, A: -1, B: '40' } });
-    expect(m.imageTokens).toEqual({ low: defaultUsageModel().imageTokens.low, high: 900 });
+    const m = normaliseUsageModel({ imageTokens: { low: 'x', high: 9000 }, hiddenTokens: { low: 9, high: 3 }, projectFiles: { '': 5, A: -1, B: '40' } });
+    expect(m.imageTokens).toEqual({ low: defaultUsageModel().imageTokens.low, high: 9000 });
     expect(m.hiddenTokens).toEqual({ low: 3, high: 9 });
     expect(m.projectFiles).toEqual({ B: 40 });
   });

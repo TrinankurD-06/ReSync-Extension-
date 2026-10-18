@@ -29,7 +29,9 @@ export const PROJECT_FILES_KEY = 'resync.usage.projectFiles';
 /** @returns {UsageModel} */
 export function defaultUsageModel() {
   return {
-    imageTokens: { low: 800, high: 1600 },
+    // ceil(w/28) x ceil(h/28) visual tokens, capped at 4784 on current models (a 1000x1000 image is 1296; a
+    // 1920x1080 screenshot 2691). claude.ai doesn't show image sizes, so: a ~1 MP image to the cap.
+    imageTokens: { low: 1000, high: 4800 },
     fileTokens: { low: 500, high: 5000 },
     hiddenTokens: { low: 2000, high: 20000 },
     projectDefault: { low: 0, high: 10000 },
