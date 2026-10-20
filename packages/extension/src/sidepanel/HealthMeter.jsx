@@ -68,7 +68,8 @@ export default function HealthMeter({ settings, update }) {
     refresh();
   };
 
-  if (!state?.health) return msg ? <p className="small" style={{ margin: '0 12px 8px' }}>{msg}</p> : null;
+  // No meter outside a chat (e.g. the project home page a handoff lands on), but its message stays.
+  if (!state?.health) return msg ? <p className="small" style={{ margin: '0 12px 8px' }} data-testid="handoff-msg">{msg}</p> : null;
   const { level, reasons, stats, snoozed, nudge } = state.health;
   return (
     <>

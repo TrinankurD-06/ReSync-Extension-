@@ -5,7 +5,7 @@ import { applyColours, listSidebarItems } from '../lib/colours.js';
 import { runHealthCheck } from './health.js';
 import { createPicker } from './picker.js';
 import { createLibrary } from '../lib/library.js';
-import { findComposer, waitForComposer, watchUrl, isChatPage, pageType } from '../lib/selectors.js';
+import { findComposer, waitForComposer, watchUrl, isChatPage, pageType, isSendButton } from '../lib/selectors.js';
 import { createChainController, realPage, mutationWait } from './chain.js';
 import { readConversation, runInChat, takePendingInsertItem, scrollToTurn, pageMeta } from './conversation.js';
 import { createUsageTracker } from './usageTracker.js';
@@ -102,7 +102,13 @@ async function linkHandoff() {
 
 /** Selector health, after giving the composer time to mount (it renders late after in-app navigation). */
 async function checkHealth() {
-  if (isChatPage(location.pathname)) await waitForComposer({ overrides: settings.selectorOverrides, timeoutMs: 8000, pathname: () => location.pathname });
+  // The URL changes before the app re-renders, so the composer found first can be the previous page's, about to be
+  // removed: if it is gone by the time we look again, wait for the new one.
+  for (let i = 0; i < 3 && isChatPage(location.pathname); i++) {
+    const found = await waitForComposer({ overrides: settings.selectorOverrides, timeoutMs: 8000, pathname: () => location.pathname });
+    await new Promise((r) => setTimeout(r, 0));
+    if (!found || found.el.isConnected) break;
+  }
   runHealthCheck({ overrides: settings.selectorOverrides });
 }
 
@@ -151,13 +157,28 @@ async function start() {
   });
   tracker.baseline();
 
+  // Sending the first message from a new-chat or project home page makes claude.ai move to /chat/<id>. That is the
+  // same conversation continuing, not a different chat, so it must not be reset (or its first message would be
+  // treated as old history: not counted, not checked against the ledger).
+  let lastPage = pageType(location.pathname);
+  let sentAt = 0;
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && findComposer({ overrides: settings.selectorOverrides })?.el.contains(/** @type {Node} */ (e.target))) sentAt = Date.now();
+  }, true);
+  document.addEventListener('click', (e) => {
+    if (isSendButton(e.target, { overrides: settings.selectorOverrides })) sentAt = Date.now();
+  }, true);
+
   // claude.ai is a single-page app: URL changes (pushState via the main-world nav hook, back/forward, or seen on
   // re-render) mean a different page; the composer may mount later, so detection waits for it.
   watchUrl(() => {
+    const to = pageType(location.pathname);
+    const startedChat = (lastPage === 'new-chat' || lastPage === 'project-home') && to === 'chat' && Date.now() - sentAt < 15_000;
+    lastPage = to;
     stats = null;
     renderBadge(null);
     checkHealth();
-    tracker.baseline(); // a different chat's history is not new usage
+    if (!startedChat) tracker.baseline(); // a different chat's history is not new usage
     linkHandoff();
     deliverPendingInsert();
   });

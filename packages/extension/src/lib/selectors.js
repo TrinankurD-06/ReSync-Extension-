@@ -261,6 +261,23 @@ export function waitForComposer(o = {}) {
   });
 }
 
+/**
+ * Is this element (or one of its parents) a send button?
+ * @param {EventTarget | null} target
+ * @param {{ overrides?: Record<string, string[] | string> }} [o]
+ */
+export function isSendButton(target, o = {}) {
+  const el = /** @type {Element | null} */ (target);
+  if (!el?.closest) return false;
+  return selectorList('sendButton', o.overrides).some((sel) => {
+    try {
+      return Boolean(el.closest(sel));
+    } catch {
+      return false;
+    }
+  });
+}
+
 /** Event the main-world nav hook (public/nav-hook.js) fires on document after history.pushState / replaceState. */
 export const NAVIGATE_EVENT = 'resync:navigate';
 

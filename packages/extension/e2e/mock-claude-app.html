@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Launch site - Claude</title>
+<style>
+  body { font-family: system-ui; display: flex; margin: 0; }
+  nav { width: 180px; padding: 8px; border-right: 1px solid #ddd; }
+  nav a { display: block; padding: 4px; }
+  #app { flex: 1; padding: 12px; }
+  .ProseMirror { border: 1px solid #999; min-height: 40px; padding: 6px; white-space: pre-wrap; }
+  .mobile-only { display: none; }
+  .cols { display: flex; gap: 12px; }
+  .cols > div { flex: 1; }
+</style>
+</head>
+<body>
+<!-- A single-page stand-in for claude.ai for the composer / ledger / handoff end-to-end test. Like the real site it
+     navigates in-app with history.pushState, renders a project home page whose composer card mounts late (next to
+     Instructions and Memory editors and a hidden duplicate composer), keeps Send disabled until the editor has text,
+     and moves to /chat/<id> after the first message on a project home or new-chat page. -->
+<nav>
+  <a href="/new">New chat</a>
+  <a href="/project/p1">Launch site</a>
+  <a href="/chat/c1">Pricing chat</a>
+</nav>
+<div id="app"></div>
+<script>
+  const app = document.getElementById('app');
+  window.sentMessages = [];
+  let next = 0;
+  const SAMPLE = [
+    ['user', 'We need to pick a database and a launch date for the site.'],
+    ['assistant', '<p>PostgreSQL fits, since the team already knows it. Launch on 4 November, when the conference starts.</p>'],
+    ['user', 'Agreed on both. Should we also offer a free tier?'],
+    ['assistant', '<p>Competitors offer one, so it could help, but you have not confirmed it yet.</p>'],
+  ];
+  const threads = JSON.parse(sessionStorage.getItem('threads') || 'null') || { c1: SAMPLE.slice() };
+  const save = () => sessionStorage.setItem('threads', JSON.stringify(threads));
+
+  const DECISIONS = ['Use PostgreSQL for the main database — because the team already knows it', 'Launch on 4 November — because the conference starts that week', 'Offer a free tier (assumed) — because competitors do'];
+  function replyFor(text) {
+    if (text.includes('Context Passport')) {
+      const s = (h, body) => `<h2>${h}</h2>${body}`;
+      return s('Meta', '<ul><li>Date: 2026-10-21</li></ul>')
+        + s('Goal', '<p>Ship the Launch site marketing pages.</p>')
+        + s('Current state', '<p>Database and launch date chosen.</p>')
+        + s('Decisions made (and why)', `<ul>${DECISIONS.map((d) => `<li>${d}</li>`).join('')}</ul>`)
+        + s('Open questions', '<p>None</p>') + s('Dead ends', '<p>None</p>')
+        + s('Next 3 steps', '<ol><li>Write the pricing page</li><li>Set up hosting</li><li>Book the launch post</li></ol>')
+        + s('Key files', '<p>None</p>');
+    }
+    // Long replies, so a chat grows quickly (the meter test).
+    // Each reply starts with the question, so replies differ like real ones do.
+    return `<p>About "${text.slice(0, 60).replace(/</g, '&lt;')}": ${'Here is a detailed answer about the launch plan and the pricing page. '.repeat(Number(/x(\d+)/.exec(text)?.[1] ?? 2))}</p>`;
+  }
+
+  function route() {
+    const p = location.pathname;
+    if (/^\/project\/[^/]+\/?$/.test(p)) projectHome();
+    else if (p === '/new') newChat();
+    else chat(p.split('/')[2] || 'c1');
+  }
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest('a[href^="/"]');
+    if (!a) return;
+    e.preventDefault();
+    history.pushState(null, '', a.getAttribute('href'));
+    route();
+  });
+  window.addEventListener('popstate', route);
+
+  const composerHtml = (placeholder) => `<div contenteditable="true" translate="no" class="ProseMirror" role="textbox" aria-label="Write your prompt to Claude" data-placeholder="${placeholder}"></div>`;
+  function wire(root, onSend) {
+    const editor = root.querySelector('.ProseMirror');
+    const btn = root.querySelector('button[aria-label="Send message"]');
+    const sync = () => (btn.disabled = !editor.innerText.trim());
+    editor.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const text = e.clipboardData.getData('text/plain');
+      const sel = window.getSelection();
+      if (sel && sel.toString().length && sel.toString().length >= editor.innerText.trim().length) editor.innerHTML = '';
+      for (const line of text.split('\n')) {
+        const p = document.createElement('p');
+        p.textContent = line;
+        editor.appendChild(p);
+      }
+      sync();
+    });
+    editor.addEventListener('input', sync);
+    const send = () => {
+      const text = editor.innerText.trim();
+      if (!text || btn.disabled) return;
+      editor.innerHTML = '';
+      sync();
+      onSend(text);
+    };
+    editor.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        send();
+      }
+    });
+    btn.addEventListener('click', send);
+  }
+
+  /** First message on a project home or new-chat page: the chat gets an address, then the thread renders. */
+  function startChat(text, inProject) {
+    const id = `n${++next}${Date.now().toString(36)}`;
+    threads[id] = [];
+    threads[`${id}:project`] = inProject;
+    save();
+    history.pushState(null, '', `/chat/${id}`);
+    chat(id);
+    sendIn(id, text);
+  }
+
+  function projectHome() {
+    document.title = 'Launch site - Claude';
+    app.innerHTML = `<main>
+      <header><h1>Launch site</h1><p>Marketing site for the launch</p></header>
+      <div class="mobile-only">${composerHtml('How can I help you today?')}</div>
+      <div class="cols">
+        <div id="project-main"><p id="loading">Loading...</p></div>
+        <div>
+          <section><h2>Instructions</h2><div contenteditable="true" class="ProseMirror" role="textbox" id="instructions">Write in a friendly tone.</div></section>
+          <section><h2>Memory</h2><div contenteditable="true" class="ProseMirror" id="memory">Launch is in November.</div></section>
+          <section><h2>Context</h2><p>12% of project capacity used</p></section>
+        </div>
+      </div>
+      <section aria-label="Project chats"><h2>Chats</h2><a href="/chat/c1">Pricing chat</a></section>
+    </main>`;
+    // The composer card mounts after the rest of the page.
+    setTimeout(() => {
+      const main = document.getElementById('project-main');
+      if (!main || !/^\/project\//.test(location.pathname)) return;
+      main.innerHTML = `<div class="composer-card" id="project-composer">${composerHtml('How can I help you today?')}<button type="button" aria-label="Send message" disabled>Send</button></div>`;
+      wire(main, (text) => startChat(text, true));
+    }, 600);
+  }
+
+  function newChat() {
+    document.title = 'Claude';
+    app.innerHTML = `<main><h1>Good evening</h1><fieldset>${composerHtml('How can I help you today?')}<button type="button" aria-label="Send message" disabled>Send</button></fieldset></main>`;
+    wire(app.querySelector('fieldset'), (text) => startChat(text, false));
+  }
+
+  function chat(id) {
+    threads[id] ??= [];
+    const inProject = id === 'c1' || threads[`${id}:project`];
+    document.title = `${id === 'c1' ? 'Pricing chat' : 'New chat'} - Claude`;
+    app.innerHTML = `<main>${inProject ? '<header><a href="/project/p1">Launch site</a></header>' : ''}<div id="thread"></div>
+      <fieldset>${composerHtml('Reply to Claude...')}<button type="button" aria-label="Send message" disabled>Send</button></fieldset></main>`;
+    const thread = document.getElementById('thread');
+    for (const [role, body] of threads[id]) thread.appendChild(bubble(role, body));
+    wire(app.querySelector('fieldset'), (text) => sendIn(id, text));
+  }
+
+  function bubble(role, body) {
+    const el = document.createElement('div');
+    if (role === 'user') {
+      el.dataset.testid = 'user-message';
+      el.textContent = body;
+    } else {
+      el.className = 'font-claude-response';
+      el.dataset.isStreaming = 'false';
+      el.innerHTML = body;
+    }
+    return el;
+  }
+
+  function sendIn(id, text) {
+    window.sentMessages.push(text);
+    threads[id].push(['user', text]);
+    const thread = document.getElementById('thread');
+    thread.appendChild(bubble('user', text));
+    const a = bubble('assistant', '...');
+    a.dataset.isStreaming = 'true';
+    thread.appendChild(a);
+    const stop = document.createElement('button');
+    stop.setAttribute('aria-label', 'Stop response');
+    document.querySelector('fieldset').appendChild(stop);
+    setTimeout(() => {
+      const html = replyFor(text);
+      threads[id].push(['assistant', html]);
+      save();
+      a.innerHTML = html;
+      a.dataset.isStreaming = 'false';
+      stop.remove();
+    }, 700);
+  }
+
+  route();
+</script>
+</body>
+</html>

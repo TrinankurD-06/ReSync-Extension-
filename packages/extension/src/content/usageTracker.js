@@ -143,8 +143,10 @@ export function createUsageTracker(o) {
     const kn = detectProjectKnowledge({ ...opts(), capacityTokens: model().projectCapacityTokens });
     if (kn && o.memory) await o.memory.saveDetectedProject(kn.project, kn.percent, kn.tokens).catch(() => {});
     const proj = project();
-    // A new chat (/new) gets its id once the first message is sent; keep the running context for it.
+    // A new chat (/new or a project home page) gets its id, and shows its project, once the first message is sent;
+    // keep the running context for it.
     if (!chat.id && chatId()) chat.id = chatId();
+    if (chat.project === 'No project' && proj !== 'No project') chat.project = proj;
     const list = messages();
     // Messages above the first one already seen were loaded from history ("Load earlier messages").
     const firstSeen = list.findIndex((m) => seen.has(keyOf(m.el, m.role)));
