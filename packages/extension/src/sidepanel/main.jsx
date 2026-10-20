@@ -8,6 +8,9 @@ import PromptsTab from './PromptsTab.jsx';
 import ChainTab from './ChainTab.jsx';
 import AiTab from './AiTab.jsx';
 import UsageTab from './UsageTab.jsx';
+import LedgerTab from './LedgerTab.jsx';
+import HealthMeter from './HealthMeter.jsx';
+import LedgerBanner from './LedgerBanner.jsx';
 import { Icon } from './Icon.jsx';
 
 // [id, accessible name, short visible label, icon, one-line description shown in the header]
@@ -15,6 +18,7 @@ const TABS = [
   ['prompts', 'Prompts', 'Prompts', 'prompts', 'Your saved prompts, one click away'],
   ['chain', 'Chain', 'Chain', 'chain', 'Send a series of prompts, one reply at a time'],
   ['ai', 'Passport & more', 'Passport', 'passport', 'Hand off, map and summarise this chat'],
+  ['ledger', 'Ledger', 'Ledger', 'ledger', 'What your team decided, and why'],
   ['usage', 'Usage', 'Usage', 'usage', 'How much you have been chatting'],
   ['colours', 'Colours', 'Colours', 'colours', 'Colour-code your projects and chats'],
   ['settings', 'Settings', 'Settings', 'settings', 'Account, providers and privacy'],
@@ -44,11 +48,14 @@ function App() {
             </button>
           ))}
         </nav>
+        <HealthMeter settings={settings} update={update} />
+        <LedgerBanner settings={settings} />
       </header>
       <main key={tab} className="view">
         {tab === 'prompts' && <PromptsTab onRunChain={(p) => { setChainPrompt(p); setTab('chain'); }} />}
         {tab === 'chain' && <ChainTab prompt={chainPrompt} settings={settings} update={update} />}
         {tab === 'ai' && <AiTab settings={settings} update={update} />}
+        {tab === 'ledger' && <LedgerTab settings={settings} />}
         {tab === 'usage' && <UsageTab />}
         {tab === 'colours' && <ColoursTab settings={settings} update={update} />}
         {tab === 'settings' && <SettingsTab settings={settings} update={update} />}

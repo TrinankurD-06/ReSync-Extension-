@@ -3,13 +3,14 @@ import { createExtensionSync } from '../lib/syncEngine.js';
 import { createSettingsStore } from '../lib/settings.js';
 import { createLibrary } from '../lib/library.js';
 import { createUsageStore } from '../lib/usageEstimates.js';
+import { createLedger } from '../lib/ledger.js';
 
 /**
  * Sync engine for the side panel (sign-in polling runs here: the panel stays alive while the user approves,
  * unlike the service worker, which can stop after 30 s idle).
  */
 export function panelSync() {
-  return createExtensionSync({ area: chrome.storage.local, settings: createSettingsStore(), library: createLibrary(), usage: createUsageStore() });
+  return createExtensionSync({ area: chrome.storage.local, settings: createSettingsStore(), library: createLibrary(), usage: createUsageStore(), ledger: createLedger() });
 }
 
 /**

@@ -11,8 +11,8 @@ import { markdownOf } from './conversation.js';
 /**
  * @typedef {import('../lib/usageEstimates.js').Range} Range
  * @typedef {{
- *   chatContext(chatId: string): Promise<Range | null>,
- *   saveChatContext(chatId: string, c: Range): Promise<void>,
+ *   chatContext(chatId: string): Promise<(Range & { turns?: number, attachments?: number }) | null>,
+ *   saveChatContext(chatId: string, c: Range, counts?: { turns: number, attachments: number }): Promise<void>,
  *   detectedProjects(): Promise<Record<string, Range>>,
  *   saveDetectedProject(project: string, percent: number, tokens: Range): Promise<void>,
  * }} UsageMemory
@@ -60,6 +60,8 @@ export function detectProjectKnowledge(o) {
  *   memory?: UsageMemory,
  *   projectName?: () => string,
  *   chatId?: () => string,
+ *   onMessage?: (m: { role: 'user' | 'assistant', text: string }) => void,   each NEW message (not history), for the ledger check
+ *   onStats?: (s: { chatId: string, project: string, tokens: number, turns: number, attachments: number }) => void,
  * }} o
  */
 export function createUsageTracker(o) {
@@ -95,8 +97,10 @@ export function createUsageTracker(o) {
   /** @param {Element} el @param {'u' | 'a'} role */
   const sizeOf = (el, role) => ({ tokens: estimateTokens(markdownOf(el)), ...(role === 'u' ? countAttachments(el, opts()) : {}) });
 
-  /** The current chat's running estimate. Rebuilt by baseline(). */
-  let chat = { id: '', project: 'No project', est: createChatEstimator({ model: model(), project: { low: 0, high: 0 } }) };
+  /** The current chat's running estimate, turn count and attachment count. Rebuilt by baseline(). */
+  let chat = { id: '', project: 'No project', turns: 0, attachments: 0, est: createChatEstimator({ model: model(), project: { low: 0, high: 0 } }) };
+  /** Numbers for the Chat Health Meter: the context the chat re-reads (high end), turns and attachments. */
+  const stats = () => ({ chatId: chat.id, project: chat.project, tokens: chat.est.context.high, turns: chat.turns, attachments: chat.attachments });
   let ready = Promise.resolve();
 
   /**
@@ -107,12 +111,15 @@ export function createUsageTracker(o) {
   function baseline() {
     const history = { low: 0, high: 0 };
     const m = model();
-    for (const msg of messages()) {
+    const shown = messages();
+    let attachments = 0;
+    for (const msg of shown) {
       seen.add(keyOf(msg.el, msg.role));
       const size = sizeOf(msg.el, msg.role);
       const a = attachmentTokens(size, m);
       history.low += size.tokens + a.low;
       history.high += size.tokens + a.high;
+      attachments += (size.images ?? 0) + (size.files ?? 0);
     }
     const id = chatId();
     const proj = project();
@@ -120,12 +127,15 @@ export function createUsageTracker(o) {
       const saved = o.memory ? await o.memory.chatContext(id).catch(() => null) : null;
       const detected = o.memory ? await o.memory.detectedProjects().catch(() => ({})) : {};
       const context = saved && saved.high > history.high ? { low: saved.low, high: saved.high } : history;
-      chat = { id, project: proj, est: createChatEstimator({ model: m, project: projectFileTokens(proj, { detected, model: m }), context }) };
+      // claude.ai may render only part of a long chat: the saved counts win when larger.
+      const turns = Math.max(shown.length, saved?.turns ?? 0);
+      chat = { id, project: proj, turns, attachments: Math.max(attachments, saved?.attachments ?? 0), est: createChatEstimator({ model: m, project: projectFileTokens(proj, { detected, model: m }), context }) };
+      o.onStats?.(stats());
     })();
     return ready;
   }
 
-  const save = () => (o.memory && chat.id ? o.memory.saveChatContext(chat.id, chat.est.context).catch(() => {}) : Promise.resolve());
+  const save = () => (o.memory && chat.id ? o.memory.saveChatContext(chat.id, chat.est.context, { turns: chat.turns, attachments: chat.attachments }).catch(() => {}) : Promise.resolve());
 
   /** Look for new messages and finished replies. Call on page mutations. */
   async function scan() {
@@ -149,9 +159,13 @@ export function createUsageTracker(o) {
       seen.add(k);
       if (firstSeen >= 0 && i < firstSeen) continue;
       if (m.role === 'u') {
-        const r = chat.est.user(sizeOf(m.el, 'u'));
+        const size = sizeOf(m.el, 'u');
+        const r = chat.est.user(size);
+        chat.turns++;
+        chat.attachments += (size.images ?? 0) + (size.files ?? 0);
         await o.add({ project: proj, messages: 1, typedTokens: r.typed, processed: r.processed });
         await save();
+        o.onMessage?.({ role: 'user', text: markdownOf(m.el) });
       } else pending.set(m.el, m.role);
     }
     if (pending.size && !isStreaming(opts())) {
@@ -163,11 +177,14 @@ export function createUsageTracker(o) {
         counted.add(k);
         seen.add(k);
         const r = chat.est.reply(sizeOf(el, 'a'));
+        chat.turns++;
         await o.add({ project: proj, processed: r.processed });
         await save();
+        o.onMessage?.({ role: 'assistant', text: markdownOf(el) });
       }
     }
+    o.onStats?.(stats());
   }
 
-  return { baseline, scan, get ready() { return ready; } };
+  return { baseline, scan, stats, get ready() { return ready; } };
 }

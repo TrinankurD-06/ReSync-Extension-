@@ -1,7 +1,7 @@
 // Reading, filling and sending the claude.ai message box. The composer is a rich-text editor
 // (ProseMirror contenteditable today), so text must go in through events the editor understands;
 // writing innerHTML directly would leave the editor's internal state out of sync.
-import { query } from './selectors.js';
+import { query, sendButtonFor } from './selectors.js';
 
 /** @param {Element} el */
 const isTextField = (el) => el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement;
@@ -152,4 +152,63 @@ export function submit(o = {}) {
   el.dispatchEvent(new KeyboardEvent('keydown', opts));
   el.dispatchEvent(new KeyboardEvent('keyup', opts));
   return true;
+}
+
+/** Is the send button there and enabled? @param {HTMLButtonElement | null} btn */
+const enabled = (btn) => Boolean(btn && !btn.disabled && btn.getAttribute('aria-disabled') !== 'true');
+
+/**
+ * Insert text and check that the editor registered it: the text is in the box, and the send button (when there is
+ * one) is enabled. claude.ai keeps Send disabled until its editor state has text, so a disabled button after an
+ * insert means the editor didn't take it (e.g. only the DOM changed).
+ * @param {Element} el composer element
+ * @param {string} text
+ * @param {{ replace?: boolean, overrides?: Record<string, string[] | string>, tries?: number, wait?: (ms: number) => Promise<void> }} [o]
+ * @returns {Promise<{ ok: boolean, method: string, present: boolean, sendReady: boolean }>}
+ */
+export async function insertAndVerify(el, text, o = {}) {
+  const method = insertText(el, text, { replace: o.replace });
+  const want = norm(text).slice(0, 60);
+  const wait = o.wait ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+  let present = false;
+  let sendReady = false;
+  let hasButton = false;
+  // The editor and the button update asynchronously (React re-render): give them up to ~1 s.
+  for (let i = 0; i < (o.tries ?? 10); i++) {
+    present = norm(readText(el)).includes(want);
+    const btn = sendButtonFor(el, { overrides: o.overrides });
+    hasButton = Boolean(btn);
+    sendReady = enabled(btn);
+    if (present && (sendReady || !hasButton)) break;
+    await wait(100);
+  }
+  return { ok: present && (sendReady || !hasButton), method, present, sendReady };
+}
+
+/**
+ * Copy text to the clipboard (fallback when the message box can't be found or filled). Uses the async clipboard
+ * API, then a hidden textarea + execCommand('copy'). Returns whether it worked; browsers may refuse without a
+ * recent click.
+ * @param {string} text
+ */
+export async function copyToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    /* try the old way */
+  }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = typeof document.execCommand === 'function' && document.execCommand('copy');
+    ta.remove();
+    return Boolean(ok);
+  } catch {
+    return false;
+  }
 }

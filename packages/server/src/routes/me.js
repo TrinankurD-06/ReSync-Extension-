@@ -14,7 +14,7 @@ export function meRoutes(_cfg) {
 
   r.get('/me', requireUser, async (req, res) => {
     const team = req.user.teamId ? await Team.findById(req.user.teamId) : null;
-    res.json({ ...publicUser(req.user), team: team ? { id: String(team._id), name: team.name } : null });
+    res.json({ ...publicUser(req.user), team: team ? { id: String(team._id), name: team.name, ledgerSync: Boolean(team.ledgerSync) } : null });
   });
 
   r.get('/me/settings', requireUser, (req, res) => res.json({ settings: req.user.settings ?? {} }));

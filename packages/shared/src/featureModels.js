@@ -2,7 +2,7 @@
 // and API mode only becomes possible once the user adds a provider.
 import { z } from 'zod';
 
-export const FEATURES = /** @type {const} */ (['passport', 'tree', 'summary', 'promptTools', 'tts']);
+export const FEATURES = /** @type {const} */ (['passport', 'tree', 'summary', 'promptTools', 'tts', 'ledger']);
 export const PROVIDER_TYPES = /** @type {const} */ (['anthropic', 'openai', 'gemini', 'openrouter', 'openai-compatible']);
 
 const providerSchema = z.object({

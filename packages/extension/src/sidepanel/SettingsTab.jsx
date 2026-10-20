@@ -6,7 +6,7 @@ import { STATUS_KEY } from '../lib/syncEngine.js';
 import { createUsageStore, projectFileTokens } from '../lib/usageEstimates.js';
 import { testProvider, panelSync } from './bridge.js';
 
-const FEATURE_LABELS = { passport: 'Context Passport', tree: 'Topic tree', summary: 'Summary', promptTools: 'Prompt tools', tts: 'Voice (provider TTS)' };
+const FEATURE_LABELS = { passport: 'Context Passport', tree: 'Topic tree', summary: 'Summary', promptTools: 'Prompt tools', tts: 'Voice (provider TTS)', ledger: 'Decision Ledger checks' };
 
 /** @param {{ settings: import('../lib/settings.js').Settings, update: (fn: (s: any) => void) => Promise<void> }} props */
 export default function SettingsTab({ settings, update }) {
@@ -20,6 +20,8 @@ export default function SettingsTab({ settings, update }) {
       <ProvidersSection settings={settings} update={update} vault={vault} />
       <FeatureMapSection settings={settings} update={update} />
       <PrivacySection settings={settings} update={update} />
+      <LedgerSection settings={settings} update={update} />
+      <ChatHealthSection settings={settings} update={update} />
       <UsageModelSection settings={settings} update={update} />
       <SelectorsSection settings={settings} update={update} />
     </>
@@ -261,6 +263,15 @@ function FeatureMapSection({ settings, update }) {
     update((s) => {
       s.ai.features[feature] = { ...(s.ai.features[feature] ?? { mode: 'in-chat' }), ...patch };
     });
+  // The ledger never posts in the chat: without a provider it only matches decisions locally ("Related team decision").
+  // With one, the new message and the matching decisions are sent to it, so ask once.
+  const setLedgerMode = async (mode) => {
+    if (mode === 'api' && !settings.privacy.apiModeAcknowledged.ledger && !confirm('Decision Ledger checks will send each new chat message, and the team decisions it might conflict with, to your AI provider. Only messages that share key terms with a decision are sent. Continue?')) return;
+    await update((s) => {
+      s.ai.features.ledger = { ...(s.ai.features.ledger ?? {}), mode };
+      if (mode === 'api') s.privacy.apiModeAcknowledged.ledger = true;
+    });
+  };
   return (
     <section>
       <h2>Feature to model</h2>
@@ -270,8 +281,8 @@ function FeatureMapSection({ settings, update }) {
           <div className="card" key={f}>
             <strong>{FEATURE_LABELS[f] ?? f}</strong>
             <div className="row">
-              <select aria-label={`${f} mode`} value={fs.mode} onChange={(e) => set(f, { mode: e.target.value })}>
-                <option value="in-chat">In-chat (free, no key)</option>
+              <select aria-label={`${f} mode`} value={fs.mode} onChange={(e) => (f === 'ledger' ? setLedgerMode(e.target.value) : set(f, { mode: e.target.value }))}>
+                <option value="in-chat">{f === 'ledger' ? 'Local matching only (no key)' : 'In-chat (free, no key)'}</option>
                 <option value="api" disabled={!providers.length}>API mode</option>
               </select>
               {fs.mode === 'api' && (
@@ -299,12 +310,86 @@ function PrivacySection({ settings, update }) {
   return (
     <section>
       <h2>Privacy</h2>
-      <p className="small muted">Only numbers, settings, colours and prompts sync to a team server, and only when you are signed in. Conversations never sync; a passport or summary is shared only when you click Share.</p>
+      <p className="small muted">Numbers, settings, colours and prompts sync to a team server, and only when you are signed in. Conversations never sync; a passport or summary is shared only when you click Share. Decision Ledger text syncs only if you turn it on below (see Decision Ledger).</p>
       {[['syncPrompts', 'Sync my prompt library'], ['syncColours', 'Sync project colours'], ['syncUsage', 'Sync usage numbers (estimates, no content)']].map(([k, label]) => (
         <label key={k} className="row"><input type="checkbox" style={{ width: 'auto' }} checked={settings.privacy[k]} onChange={() => toggle(k)} /> {label}</label>
       ))}
       <p className="small">API mode approved for: {acked.length ? acked.join(', ') : 'nothing yet'}</p>
       {acked.length > 0 && <button className="secondary" onClick={() => update((s) => { s.privacy.apiModeAcknowledged = {}; })}>Ask again before sending</button>}
+    </section>
+  );
+}
+
+/** Decision Ledger: your name on decisions, and the opt-in team sync (text, so off by default). */
+function LedgerSection({ settings, update }) {
+  const [name, setName] = useState(settings.ledger.author);
+  const [me, setMe] = useState(/** @type {any} */ (null));
+  const team = me?.team ?? null;
+  const [msg, setMsg] = useState('');
+  const sync = useMemo(() => panelSync(), []);
+  useEffect(() => {
+    (async () => {
+      if (settings.serverUrl && (await sync.signedIn())) setMe(await sync.me().catch(() => null));
+    })();
+  }, [settings.serverUrl]);
+  const toggleSync = async () => {
+    const on = !settings.privacy.syncLedger;
+    if (on && !confirm('Sync decisions with your team server? This uploads decision text, reasons, your name, the project name and the source chat link. API keys, tokens, passwords, emails and phone numbers are removed first. Your team owner must also allow ledger sync.')) return;
+    await update((s) => {
+      s.privacy.syncLedger = on;
+    });
+  };
+  const setTeamSync = async (on) => {
+    try {
+      await sync.setTeamLedgerSync(on);
+      setMe({ ...me, team: { ...team, ledgerSync: on } });
+      setMsg(on ? 'Ledger sync allowed for your team.' : 'Ledger sync turned off for your team.');
+    } catch (e) {
+      setMsg(e.message);
+    }
+  };
+  return (
+    <section>
+      <h2>Decision Ledger</h2>
+      <label htmlFor="ledger-author">Your name on decisions (blank: your team-server name)</label>
+      <div className="row">
+        <input id="ledger-author" value={name} onChange={(e) => setName(e.target.value)} />
+        <button className="secondary" onClick={() => update((s) => { s.ledger.author = name; })}>Save</button>
+      </div>
+      <label className="row"><input type="checkbox" style={{ width: 'auto' }} checked={settings.privacy.syncLedger} onChange={toggleSync} /> Sync decisions with my team (off by default)</label>
+      <p className="small muted">
+        What is shared when on: each decision's text and reason, author, project name, source chat link, status and links between decisions. Before upload ReSync removes API keys, tokens, passwords, emails and phone numbers (the server checks again). Without a server, or with this off, the ledger is local to this browser.
+        {settings.serverUrl ? (team ? ` Your team (${team.name}) has ledger sync ${team.ledgerSync ? 'allowed' : 'not allowed yet; the owner can allow it here or in the dashboard'}.` : ' Sign in to see whether your team allows it.') : ''}
+      </p>
+      {team && me.role === 'owner' && <button className="secondary" onClick={() => setTeamSync(!team.ledgerSync)}>{team.ledgerSync ? 'Turn off ledger sync for the team' : 'Allow ledger sync for the team'}</button>}
+      {msg && <p className="small">{msg}</p>}
+      <p className="small muted">Conflict checks use a model only if "Decision Ledger checks" is set to API mode under Feature to model; otherwise ReSync matches decisions locally and shows them as "Related team decision".</p>
+    </section>
+  );
+}
+
+/** Chat Health Meter thresholds and handoff behaviour. */
+function ChatHealthSection({ settings, update }) {
+  const t = settings.chatHealth;
+  const set = (level, key, v) => update((s) => {
+    s.chatHealth[level] = { ...s.chatHealth[level], [key]: Number(v) };
+  });
+  const rows = [['tokens', 'Estimated tokens the chat re-reads'], ['turns', 'Turns (messages and replies)'], ['attachments', 'Attachments']];
+  return (
+    <section>
+      <h2>Chat health</h2>
+      <p className="small muted">Long chats get slower and more likely to lose earlier details. The meter turns amber, then red, when any of these is reached. Estimates and rules of thumb, not a model limit; tune them to your models.</p>
+      {rows.map(([k, label]) => (
+        <div key={k}>
+          <label>{label}</label>
+          <div className="row">
+            <input type="number" min="1" aria-label={`Amber from: ${label}`} value={t.amber[k]} onChange={(e) => set('amber', k, e.target.value)} />
+            <input type="number" min="1" aria-label={`Red from: ${label}`} value={t.red[k]} onChange={(e) => set('red', k, e.target.value)} />
+          </div>
+        </div>
+      ))}
+      <p className="small muted">Left: amber from. Right: red from.</p>
+      <label className="row"><input type="checkbox" style={{ width: 'auto' }} checked={settings.handoff.autoSend} onChange={() => update((s) => { s.handoff.autoSend = !s.handoff.autoSend; })} /> Handoff: send the brief automatically in the new chat (off: ReSync pastes it and you press Send)</label>
     </section>
   );
 }

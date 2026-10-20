@@ -187,6 +187,16 @@ export function createSyncClient(opts) {
      */
     share: (item) => call('POST', '/shared', item),
     listShared: () => call('GET', '/shared'),
+
+    // ---- Team Decision Ledger: decision TEXT, so it is opt-in twice (the team owner allows it, and each user turns
+    // it on) and scrubbed of secrets, emails and phone numbers before upload (see ledger.js scrubDecision). ----
+    /** @returns {Promise<{ decisions: import('./ledger.js').Decision[] }>} */
+    getLedger: () => call('GET', '/ledger'),
+    /** @param {import('./ledger.js').Decision[]} decisions already scrubbed */
+    putLedger: (decisions) => call('PUT', '/ledger', { decisions }),
+    getTeam: () => call('GET', '/team'),
+    /** Team owner only. @param {{ ledgerSync: boolean }} s */
+    setTeamSettings: (s) => call('PATCH', '/team/settings', s),
   };
 }
 

@@ -1,7 +1,7 @@
 // Teams: invite-only. An owner creates the team and shares invite links; roles are owner and member.
 import { Router } from 'express';
 import { z } from 'zod';
-import { User, Team, Invite, Prompt, PromptVersion, UsageRecord, QueueReport, SharedItem } from '../models/index.js';
+import { User, Team, Invite, Prompt, PromptVersion, UsageRecord, QueueReport, SharedItem, Decision } from '../models/index.js';
 import { requireUser, requireTeam, requireOwner, randomToken, hashToken } from '../lib/auth.js';
 import { validate, badRequest, notFound, conflict, forbidden, objectId } from '../lib/http.js';
 
@@ -23,9 +23,16 @@ export function teamRoutes(cfg) {
     const team = await Team.findById(req.user.teamId);
     const members = await User.find({ teamId: req.user.teamId }).sort({ createdAt: 1 });
     res.json({
-      team: { id: String(team._id), name: team.name, ownerId: String(team.ownerId) },
+      team: { id: String(team._id), name: team.name, ownerId: String(team.ownerId), ledgerSync: Boolean(team.ledgerSync) },
       members: members.map((m) => ({ id: String(m._id), name: m.name, email: m.email, avatarUrl: m.avatarUrl, role: m.role })),
     });
+  });
+
+  /** Team settings (owner only). ledgerSync: allow members to sync Decision Ledger text to this server. */
+  r.patch('/team/settings', requireOwner, async (req, res) => {
+    const body = validate(z.object({ ledgerSync: z.boolean() }).strict(), req.body);
+    await Team.updateOne({ _id: req.user.teamId }, { ledgerSync: body.ledgerSync });
+    res.json({ ok: true, ledgerSync: body.ledgerSync });
   });
 
   // ---- Invites ----
@@ -114,6 +121,7 @@ export function teamRoutes(cfg) {
     await PromptVersion.deleteMany({ promptId: { $in: teamPrompts.map((p) => p._id) } });
     await Prompt.deleteMany({ teamId, scope: 'team' });
     await SharedItem.deleteMany({ teamId });
+    await Decision.deleteMany({ teamId });
     await QueueReport.updateMany({ teamId }, { $unset: { teamId: 1 } });
     await UsageRecord.updateMany({ teamId }, { $unset: { teamId: 1 } });
     await Invite.deleteMany({ teamId });

@@ -79,7 +79,7 @@ code { font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; font-siz
 }
 .brand-name { font-weight: 700; font-size: 15px; letter-spacing: -0.01em; }
 .brand-sub { color: var(--muted); font-size: 12px; }
-.tabs { display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; padding: 0 8px 8px; }
+.tabs { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; padding: 0 8px 8px; }
 .tabs button {
   display: flex; flex-direction: column; align-items: center; gap: 2px;
   border: 0; background: transparent; color: var(--muted);
@@ -217,3 +217,21 @@ ol, ul { padding-left: 20px; }
 details > summary { cursor: pointer; }
 ::-webkit-scrollbar { width: 10px; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; border: 3px solid var(--bg); }
+
+/* ---------- Chat health meter, ledger banner, ledger ---------- */
+.meter { display: flex; align-items: center; gap: 8px; margin: 0 8px 8px; padding: 6px 10px; border-radius: 12px; background: var(--surface-2); font-size: 12px; }
+.meter .dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--ok); }
+.meter[data-level='amber'] .dot { background: #d97706; }
+.meter[data-level='red'] .dot { background: var(--error); }
+.meter[data-level='red'] { background: var(--error-soft); }
+.meter .grow { flex: 1 1 auto; min-width: 0; }
+.meter button { flex: none; font-size: 11.5px; padding: 4px 9px; }
+.ledger-alert { border-left: 4px solid var(--accent); }
+.ledger-alert[data-relation='conflict'] { border-left-color: var(--error); }
+.decision { position: relative; }
+.decision .meta { color: var(--muted); font-size: 11.5px; margin-top: 4px; }
+.status-pill { display: inline-block; font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.04em; padding: 1px 8px; border-radius: 999px; background: var(--ok-soft); color: var(--ok); margin-left: 6px; }
+.status-pill[data-status='pending'] { background: var(--warn-bg); color: var(--warn-text); }
+.status-pill[data-status='superseded'] { background: var(--surface-2); color: var(--muted); text-decoration: line-through; }
+.timeline-day { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 14px 0 6px; }
+.history { border-left: 2px solid var(--border); margin: 6px 0 0 4px; padding-left: 10px; font-size: 12px; }

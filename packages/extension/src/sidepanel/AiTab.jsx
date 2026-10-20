@@ -6,6 +6,8 @@ import { renderMermaid, tagMindmapNodes, turnFromEvent } from './mindmap.js';
 import { createArtifacts, ARTIFACTS_KEY } from '../lib/artifacts.js';
 import { setPendingInsert } from '../content/conversation.js';
 import { aiRun, toPage, activeClaudeTab, panelSync } from './bridge.js';
+import { createLedger } from '../lib/ledger.js';
+import { authorName, confirmSameFn } from './ledgerBridge.js';
 import { Icon } from './Icon.jsx';
 import Voice from './Voice.jsx';
 
@@ -26,6 +28,8 @@ export default function AiTab({ settings, update }) {
   const [history, setHistory] = useState([]);
   /** A topic-tree reply that couldn't be parsed: shown raw with a Retry button. */
   const [treeFailure, setTreeFailure] = useState(/** @type {{ raw: string, errors: string[] } | null} */ (null));
+  /** What the last passport added to the Decision Ledger. */
+  const [ledgerMsg, setLedgerMsg] = useState('');
   const audience = settings.summary.audience;
 
   useEffect(() => {
@@ -62,7 +66,10 @@ export default function AiTab({ settings, update }) {
       const p = parsePassport(text);
       // Meta comes from the page (date, project, chat URL), not from the model.
       const content = renderPassport(p.sections, { title: (await activeClaudeTab())?.title?.replace(/ - Claude$/, ''), project: page.meta?.project, source: page.meta?.source, mode });
-      item = { kind: 'passport', title: 'Context Passport', content, mode, data: { missing: p.missing, warnings: passportLengthWarnings(p.sections) } };
+      item = { kind: 'passport', title: 'Context Passport', content, mode, data: { missing: p.missing, warnings: passportLengthWarnings(p.sections), sourceChat: page.meta?.source } };
+      // Its "Decisions made (and why)" go into the Decision Ledger ((assumed) ones as pending; near-duplicates merge).
+      const d = await createLedger().addFromPassport(content, { author: await authorName(settings), project: page.meta?.project, sourceChat: page.meta?.source }, { confirmSame: confirmSameFn(settings) });
+      setLedgerMsg(d.added.length || d.merged.length ? `Decision Ledger: ${d.added.length} added${d.pending ? ` (${d.pending} pending: confirm them in the Ledger tab)` : ''}${d.merged.length ? `, ${d.merged.length} merged into existing decisions` : ''}.` : '');
     } else if (feature === 'tree') {
       const t = parseTreeResponse(text, { turns: page.turns });
       if (!t.ok) {
@@ -82,6 +89,7 @@ export default function AiTab({ settings, update }) {
     setStream('');
     setCurrent(null);
     setTreeFailure(null);
+    setLedgerMsg('');
     setBusy(feature);
     try {
       const route = resolveFeature(settings.ai, feature); // throws a readable ApiModeOffError if misconfigured
@@ -165,6 +173,7 @@ export default function AiTab({ settings, update }) {
           <button className="primary" disabled={Boolean(busy)} onClick={() => run('tree')}>Retry</button>
         </div>
       )}
+      {ledgerMsg && <p className="tip" data-testid="ledger-msg">{ledgerMsg}</p>}
       {current && <ArtifactView item={current} onNewChat={newChatWithPassport} settings={settings} />}
       {history.length > 0 && (
         <details>

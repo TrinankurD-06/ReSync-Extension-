@@ -101,14 +101,18 @@ export function scrollToTurn(turn, o = {}) {
 /**
  * What ReSync knows about this chat for the passport's Meta section (filled in by ReSync, not the model).
  * @param {{ root?: ParentNode, overrides?: Record<string, string[]>, href?: string, now?: Date }} [o]
- * @returns {{ date: string, project: string, source: string }}
+ * projectUrl: the project's home page when the chat is in a project (the handoff opens a new chat there), else ''.
+ * @returns {{ date: string, project: string, source: string, projectUrl: string }}
  */
 export function pageMeta(o = {}) {
   const d = o.now ?? new Date();
   const p = (x) => String(x).padStart(2, '0');
-  const project = (query('currentProjectLink', o)?.textContent ?? '').trim();
+  const link = query('currentProjectLink', o);
+  const project = (link?.textContent ?? '').trim();
   const href = o.href ?? (typeof location !== 'undefined' ? location.href : '');
-  return { date: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`, project: project || 'No project', source: href.split(/[?#]/)[0] || 'unknown' };
+  const path = link?.getAttribute('href') ?? '';
+  const projectUrl = /^\/project\/[^/?#]+/.test(path) ? new URL(path, href || 'https://claude.ai/').href.split(/[?#]/)[0] : '';
+  return { date: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`, project: project || 'No project', source: href.split(/[?#]/)[0] || 'unknown', projectUrl };
 }
 
 /**
@@ -140,9 +144,22 @@ export async function runInChat(feature, o) {
  * Save text to insert into the next claude.ai composer that appears (used after opening a new chat).
  * @param {string} text
  * @param {{ set(o: Record<string, any>): Promise<void> }} [area]
+ * @param {{ autoSend?: boolean, handoffId?: string }} [extra] handoff: press Send after inserting; which handoff it is
  */
-export function setPendingInsert(text, area = chrome.storage.local) {
-  return area.set({ [PENDING_KEY]: { text, at: Date.now() } });
+export function setPendingInsert(text, area = chrome.storage.local, extra = {}) {
+  return area.set({ [PENDING_KEY]: { ...extra, text, at: Date.now() } });
+}
+
+/**
+ * If a fresh pending insert exists, take it (once), with its options.
+ * @param {{ get(k: string): Promise<Record<string, any>>, remove(k: string): Promise<void> }} [area]
+ * @returns {Promise<{ text: string, at: number, autoSend?: boolean, handoffId?: string } | null>}
+ */
+export async function takePendingInsertItem(area = chrome.storage.local) {
+  const p = (await area.get(PENDING_KEY))[PENDING_KEY];
+  if (!p) return null;
+  await area.remove(PENDING_KEY);
+  return Date.now() - p.at <= PENDING_MAX_AGE_MS ? p : null;
 }
 
 /**
@@ -151,8 +168,5 @@ export function setPendingInsert(text, area = chrome.storage.local) {
  * @returns {Promise<string | null>}
  */
 export async function takePendingInsert(area = chrome.storage.local) {
-  const p = (await area.get(PENDING_KEY))[PENDING_KEY];
-  if (!p) return null;
-  await area.remove(PENDING_KEY);
-  return Date.now() - p.at <= PENDING_MAX_AGE_MS ? p.text : null;
+  return (await takePendingInsertItem(area))?.text ?? null;
 }

@@ -73,7 +73,7 @@ describe('conversation on the page', () => {
 
   it('passport Meta comes from the page: date, project and chat URL', async () => {
     document.body.innerHTML = '<header><a href="/project/p1"> Launch </a></header><main><textarea placeholder="Reply"></textarea><button aria-label="Send message">Send</button></main>';
-    expect(pageMeta({ href: 'https://claude.ai/chat/abc#x', now: new Date(2026, 9, 19) })).toEqual({ date: '2026-10-19', project: 'Launch', source: 'https://claude.ai/chat/abc' });
+    expect(pageMeta({ href: 'https://claude.ai/chat/abc#x', now: new Date(2026, 9, 19) })).toEqual({ date: '2026-10-19', project: 'Launch', source: 'https://claude.ai/chat/abc', projectUrl: 'https://claude.ai/project/p1' });
     const sent = [];
     document.querySelector('button').addEventListener('click', () => {
       sent.push(document.querySelector('textarea').value);

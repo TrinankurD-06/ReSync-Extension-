@@ -4,6 +4,7 @@ import { defaultAiSettings, parseAiSettings } from '@resync/shared/models';
 import { summaryAudience } from '@resync/shared/templates';
 import { mergeChainContext } from '@resync/shared/chains';
 import { defaultUsageModel, normaliseUsageModel } from './usageEstimates.js';
+import { defaultThresholds, normaliseThresholds } from './chatHealth.js';
 
 export const SETTINGS_KEY = 'resync.settings';
 
@@ -16,6 +17,7 @@ export const SETTINGS_KEY = 'resync.settings';
  *     syncUsage: boolean,                             upload usage NUMBERS when signed in
  *     syncColours: boolean,
  *     syncPrompts: boolean,
+ *     syncLedger: boolean,                            upload Decision Ledger TEXT (scrubbed); off by default, and the team must allow it too
  *   },
  *   selectorOverrides: Record<string, string[]>,
  *   voice: { voiceURI: string, rate: number, useProviderTts: boolean, ttsProvider: string, ttsVoice: string },
@@ -26,6 +28,9 @@ export const SETTINGS_KEY = 'resync.settings';
  *     successCriteria: Record<string, boolean>,                per chain slug: success-criteria step on/off
  *   },
  *   usage: import('./usageEstimates.js').UsageModel,
+ *   chatHealth: import('./chatHealth.js').HealthThresholds,
+ *   handoff: { autoSend: boolean },                     press Send after pasting the handoff brief (off: the user sends)
+ *   ledger: { author: string },                         name on decisions you add (the team server name wins when signed in)
  * }} Settings
  */
 
@@ -34,13 +39,16 @@ export function defaultSettings() {
   return {
     serverUrl: '',
     ai: defaultAiSettings(),
-    privacy: { apiModeAcknowledged: {}, syncUsage: true, syncColours: true, syncPrompts: true },
+    privacy: { apiModeAcknowledged: {}, syncUsage: true, syncColours: true, syncPrompts: true, syncLedger: false },
     selectorOverrides: {},
     voice: { voiceURI: '', rate: 1, useProviderTts: false, ttsProvider: '', ttsVoice: 'marin' },
     colours: { preset: 'startup', assignments: {}, custom: [] },
     summary: { audience: 'recap' },
     chains: { context: mergeChainContext(), successCriteria: {} },
     usage: defaultUsageModel(),
+    chatHealth: defaultThresholds(),
+    handoff: { autoSend: false },
+    ledger: { author: '' },
   };
 }
 
@@ -68,6 +76,9 @@ export function normaliseSettings(raw) {
       successCriteria: Object.fromEntries(Object.entries(r.chains?.successCriteria ?? {}).filter(([, v]) => typeof v === 'boolean')),
     },
     usage: normaliseUsageModel(r.usage),
+    chatHealth: normaliseThresholds(r.chatHealth),
+    handoff: { autoSend: r.handoff?.autoSend === true },
+    ledger: { author: typeof r.ledger?.author === 'string' ? r.ledger.author.trim().slice(0, 200) : '' },
   };
 }
 

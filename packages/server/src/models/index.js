@@ -22,7 +22,15 @@ const userSchema = new Schema(
 );
 userSchema.index({ 'identities.provider': 1, 'identities.subject': 1 }, { unique: true, sparse: true });
 
-const teamSchema = new Schema({ name: { type: String, required: true, maxlength: 120 }, ownerId: { type: id, ref: 'User', required: true } }, { timestamps: true });
+const teamSchema = new Schema(
+  {
+    name: { type: String, required: true, maxlength: 120 },
+    ownerId: { type: id, ref: 'User', required: true },
+    // Decision Ledger sync stores decision TEXT, so the owner must turn it on (off by default).
+    ledgerSync: { type: Boolean, default: false },
+  },
+  { timestamps: true },
+);
 
 const inviteSchema = new Schema(
   {
@@ -159,6 +167,29 @@ const sharedItemSchema = new Schema(
   { timestamps: true },
 );
 
+// Team Decision Ledger entries (only for teams with ledgerSync on; scrubbed by the client and again here).
+const decisionSchema = new Schema(
+  {
+    teamId: { type: id, ref: 'Team', required: true, index: true },
+    userId: { type: id, ref: 'User', required: true }, // who last uploaded it
+    clientId: { type: String, required: true, maxlength: 80 },
+    text: { type: String, required: true, maxlength: 1000 },
+    reason: { type: String, maxlength: 2000, default: '' },
+    author: { type: String, maxlength: 200, default: '' },
+    project: { type: String, maxlength: 300, default: '' },
+    sourceChat: { type: String, maxlength: 1000, default: '' },
+    status: { type: String, enum: ['active', 'superseded', 'pending'], required: true },
+    supersededBy: { type: String, maxlength: 80, default: null },
+    supersedes: { type: String, maxlength: 80, default: null },
+    tags: [{ type: String, maxlength: 60 }],
+    confirmed: { type: Boolean, default: true },
+    decidedAt: { type: String, maxlength: 40 }, // the client's createdAt
+    clientUpdatedAt: { type: String, maxlength: 40 },
+  },
+  { timestamps: true },
+);
+decisionSchema.index({ teamId: 1, clientId: 1 }, { unique: true });
+
 export const User = mongoose.models.User ?? mongoose.model('User', userSchema);
 export const Team = mongoose.models.Team ?? mongoose.model('Team', teamSchema);
 export const Invite = mongoose.models.Invite ?? mongoose.model('Invite', inviteSchema);
@@ -169,3 +200,4 @@ export const PromptVersion = mongoose.models.PromptVersion ?? mongoose.model('Pr
 export const UsageRecord = mongoose.models.UsageRecord ?? mongoose.model('UsageRecord', usageSchema);
 export const QueueReport = mongoose.models.QueueReport ?? mongoose.model('QueueReport', queueReportSchema);
 export const SharedItem = mongoose.models.SharedItem ?? mongoose.model('SharedItem', sharedItemSchema);
+export const Decision = mongoose.models.Decision ?? mongoose.model('Decision', decisionSchema);

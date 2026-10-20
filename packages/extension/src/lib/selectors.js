@@ -7,11 +7,12 @@
 
 /** @type {Record<string, string[]>} */
 export const SELECTORS = {
-  // The message box. ProseMirror contenteditable today; textarea as a generic fallback.
+  // The message box on any page. Detection goes through findComposer(), which uses the per-page lists
+  // (COMPOSER_BY_PAGE); this generic list is the fallback for other callers. Overrides of "composer" go first.
   composer: [
     '[data-testid="chat-input"]',
-    'div[contenteditable="true"].ProseMirror',
     'div[contenteditable="true"][role="textbox"]',
+    'div[contenteditable="true"].ProseMirror',
     'fieldset div[contenteditable="true"]',
     'textarea[placeholder]',
   ],
@@ -108,9 +109,185 @@ export function messageKey(el) {
   return keyed?.getAttribute('data-turn-key') || el;
 }
 
-/** Is this a conversation page (/chat/<id> or /new)? @param {string} pathname */
+/** Is this a page with a composer (/chat/<id>, /new, or a project home page)? @param {string} pathname */
 export function isChatPage(pathname) {
-  return /^\/(chat\/|new\b|project\/[^/]+\/?$)/.test(pathname);
+  return pageType(pathname) !== 'other';
+}
+
+// ---- The message box (composer), per page type ----
+// claude.ai has three kinds of page with a composer, built differently (fixtures of each are in
+// test/fixtures/claude-pages/; recapture them when the site changes and the composer tests show which entry broke):
+//  - chat:          /chat/<id>, in or out of a project. One composer at the bottom of the thread.
+//  - new-chat:      /new. The composer is centred under a greeting; no thread yet.
+//  - project-home:  /project/<id>. A "How can I help you today?" composer card at the top of the main column, next
+//                   to the project's Instructions / Memory / Context panels (which can hold editors of their own),
+//                   above the project's chat list.
+// Each list prefers stable semantic attributes (role, aria-label, placeholder) over generated class names.
+
+/** @typedef {'chat' | 'new-chat' | 'project-home' | 'other'} PageType */
+
+/** The kind of claude.ai page, from the URL alone. @param {string} pathname @returns {PageType} */
+export function pageType(pathname) {
+  if (/^\/project\/[^/]+\/?$/.test(pathname)) return 'project-home';
+  if (/^\/new\/?$/.test(pathname)) return 'new-chat';
+  if (/^\/chat\/[^/]+/.test(pathname)) return 'chat';
+  return 'other';
+}
+
+const COMPOSER_SEMANTIC = [
+  '[data-testid="chat-input"]',
+  'div[contenteditable="true"][role="textbox"]',
+  'div[contenteditable="true"][aria-label*="prompt" i]',
+  'div[contenteditable="true"][aria-label*="message" i]',
+  'div[contenteditable="true"][data-placeholder]',
+  'textarea[placeholder]',
+  'div[contenteditable="true"].ProseMirror',
+  'div[contenteditable="true"]',
+];
+
+/** Ordered fallbacks per page type (most specific first). @type {Record<PageType, string[]>} */
+export const COMPOSER_BY_PAGE = {
+  chat: ['fieldset [data-testid="chat-input"]', ...COMPOSER_SEMANTIC],
+  'new-chat': COMPOSER_SEMANTIC,
+  'project-home': [
+    'main [data-testid="chat-input"]',
+    'main div[contenteditable="true"][role="textbox"]',
+    'main div[contenteditable="true"][data-placeholder*="help" i]',
+    'main div[contenteditable="true"][aria-label*="prompt" i]',
+    ...COMPOSER_SEMANTIC,
+  ],
+  other: COMPOSER_SEMANTIC,
+};
+
+/**
+ * Containers that never hold the message box: navigation, dialogs, side panels. On a project home page the
+ * Instructions, Memory and Context panels are excluded too (by their label or heading), since they have editors.
+ */
+const NOT_COMPOSER = 'nav, aside, [role="dialog"], [role="complementary"], [data-resync-ignore]';
+const PROJECT_PANEL_LABEL = /^(?:project\s+)?(?:instructions|memory|context|knowledge|files)\b/i;
+
+/** Rendered and not hidden? @param {Element} el */
+export function isVisible(el) {
+  if (el.closest('[hidden], [aria-hidden="true"], [inert]')) return false;
+  const h = /** @type {HTMLElement} */ (el);
+  if (typeof h.checkVisibility === 'function') return h.checkVisibility({ checkVisibilityCSS: true, visibilityProperty: true });
+  for (let n = h; n; n = n.parentElement) {
+    const cs = getComputedStyle(n);
+    if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+  }
+  return true;
+}
+
+/** Inside a project panel (Instructions, Memory, Context)? Judged by the panel's label or heading. @param {Element} el */
+function inProjectPanel(el) {
+  for (let n = el.parentElement; n && n.tagName !== 'MAIN' && n.tagName !== 'BODY'; n = n.parentElement) {
+    const heading = n.querySelector(':scope > h2, :scope > h3, :scope > header h2, :scope > header h3, :scope > div > h2, :scope > div > h3');
+    const label = n.getAttribute('aria-label') ?? heading?.textContent ?? '';
+    if (PROJECT_PANEL_LABEL.test(label.trim())) return true;
+  }
+  return false;
+}
+
+/** @param {Element} el */
+const editable = (el) => (el instanceof HTMLTextAreaElement ? !el.disabled && !el.readOnly : el.getAttribute('contenteditable') !== 'false');
+
+/**
+ * Find the message box on the current page. Tries the page type's selectors in order (user overrides of
+ * "composer" first); the first selector with a usable match wins, and among its matches the one inside the main
+ * content area. Usable = editable, visible, and not in navigation, a dialog or a project panel.
+ * @param {{ root?: ParentNode, pathname?: string, overrides?: Record<string, string[] | string> }} [o]
+ * @returns {{ el: HTMLElement, page: PageType, selector: string } | null}
+ */
+export function findComposer(o = {}) {
+  const root = o.root ?? document;
+  const page = pageType(o.pathname ?? (typeof location !== 'undefined' ? location.pathname : '/'));
+  const all = selectorList('composer', o.overrides);
+  const extra = all.slice(0, all.length - SELECTORS.composer.length);
+  for (const selector of [...extra, ...COMPOSER_BY_PAGE[page]]) {
+    let els;
+    try {
+      els = [...root.querySelectorAll(selector)];
+    } catch {
+      continue; // invalid override
+    }
+    const usable = els.filter((el) => editable(el) && isVisible(el) && !el.closest(NOT_COMPOSER) && !(page === 'project-home' && inProjectPanel(el)));
+    if (!usable.length) continue;
+    const best = usable.find((el) => el.closest('main, [role="main"]')) ?? usable[0];
+    return { el: /** @type {HTMLElement} */ (best), page, selector };
+  }
+  return null;
+}
+
+/**
+ * The send button that belongs to a composer (in the same form or fieldset), else any send button on the page.
+ * @param {Element} composerEl
+ * @param {{ overrides?: Record<string, string[] | string> }} [o]
+ * @returns {HTMLButtonElement | null}
+ */
+export function sendButtonFor(composerEl, o = {}) {
+  const scope = composerEl.closest('fieldset, form');
+  return /** @type {HTMLButtonElement | null} */ ((scope && query('sendButton', { ...o, root: scope })) ?? query('sendButton', o));
+}
+
+/**
+ * Wait for the message box to mount (claude.ai renders it after navigation, sometimes seconds later): check now,
+ * then on every DOM change (and every 500 ms, for changes that are not mutations), until found or the timeout.
+ * @param {{ root?: ParentNode, pathname?: () => string, overrides?: Record<string, string[] | string>, timeoutMs?: number, signal?: AbortSignal }} [o]
+ * @returns {Promise<{ el: HTMLElement, page: PageType, selector: string } | null>}
+ */
+export function waitForComposer(o = {}) {
+  const find = () => findComposer({ root: o.root, overrides: o.overrides, pathname: o.pathname?.() });
+  const now = find();
+  if (now) return Promise.resolve(now);
+  return new Promise((resolve) => {
+    let done = false;
+    const check = () => {
+      const hit = find();
+      if (hit) finish(hit);
+    };
+    const obs = new MutationObserver(check);
+    const poll = setInterval(check, 500);
+    const timer = setTimeout(() => finish(null), o.timeoutMs ?? 10_000);
+    function finish(v) {
+      if (done) return;
+      done = true;
+      obs.disconnect();
+      clearInterval(poll);
+      clearTimeout(timer);
+      resolve(v);
+    }
+    obs.observe(/** @type {Node} */ (o.root ?? document.body ?? document), { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'style', 'class', 'contenteditable', 'aria-hidden'] });
+    o.signal?.addEventListener('abort', () => finish(null));
+  });
+}
+
+/** Event the main-world nav hook (public/nav-hook.js) fires on document after history.pushState / replaceState. */
+export const NAVIGATE_EVENT = 'resync:navigate';
+
+/**
+ * Call cb when the URL changes inside the single-page app. A content script's `history` is not the page's (isolated
+ * world), so pushState/replaceState are seen through the main-world nav hook's event; back/forward through
+ * popstate; and, as a fallback, by comparing the URL on DOM changes. Returns a function that stops watching.
+ * @param {(href: string) => void} cb
+ * @param {{ win?: Window }} [o]
+ */
+export function watchUrl(cb, o = {}) {
+  const win = o.win ?? window;
+  let last = win.location.href;
+  const check = () => {
+    if (win.location.href === last) return;
+    last = win.location.href;
+    cb(last);
+  };
+  win.addEventListener('popstate', check);
+  win.document.addEventListener(NAVIGATE_EVENT, check);
+  const obs = new MutationObserver(check);
+  obs.observe(win.document.body ?? win.document, { childList: true, subtree: true });
+  return () => {
+    win.removeEventListener('popstate', check);
+    win.document.removeEventListener(NAVIGATE_EVENT, check);
+    obs.disconnect();
+  };
 }
 
 /**
@@ -122,7 +299,7 @@ export function healthCheck(o = {}) {
   const pathname = o.pathname ?? (typeof location !== 'undefined' ? location.pathname : '/');
   const page = isChatPage(pathname) ? 'chat' : 'other';
   const required = page === 'chat' ? [...REQUIRED_IN_APP, ...REQUIRED_ON_CHAT] : REQUIRED_IN_APP;
-  const missing = required.filter((name) => !query(name, o));
+  const missing = required.filter((name) => (name === 'composer' ? !findComposer({ ...o, pathname }) : !query(name, o)));
   return { ok: missing.length === 0, missing, page };
 }
 

@@ -34,3 +34,36 @@ export function withSharedRules(text) {
 export function hasSharedRules(text) {
   return String(text).trimEnd().endsWith(sharedRulesText());
 }
+
+// ---- Secrets filter (code, not a prompt rule) ----
+// Used before any conversation-derived text leaves the device (e.g. the team Decision Ledger). The prompt rule
+// above asks the model not to write secrets; this removes the ones it (or the user) wrote anyway.
+
+/** [name, pattern] pairs, most specific first. Each match is replaced by "[removed <name>]". */
+export const SECRET_PATTERNS = /** @type {const} */ ([
+  ['api key', /\b(?:sk-ant-[A-Za-z0-9_-]{8,}|sk-or-[A-Za-z0-9_-]{8,}|sk-(?:proj-)?[A-Za-z0-9_-]{16,}|AIza[0-9A-Za-z_-]{20,}|AKIA[0-9A-Z]{16}|xox[abposr]-[A-Za-z0-9-]{10,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{20,})\b/g],
+  ['token', /\b(?:eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}|Bearer\s+[A-Za-z0-9._~+/-]{16,}=*)/g],
+  ['secret', /\b((?:password|passwd|secret|api[_-]?key|access[_-]?token|token)\s*[:=]\s*)["']?[^\s"',;]{6,}["']?/gi],
+  ['email', /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g],
+  ['phone', /(?<![\w.])(?:\+\d{1,3}[\s.-]?)?(?:\(\d{2,4}\)[\s.-]?)?\d{3,4}[\s.-]\d{3,4}(?:[\s.-]\d{2,4})?(?![\w.])/g],
+]);
+
+/**
+ * Remove API keys, tokens, passwords, emails and phone numbers from text.
+ * @param {string} text
+ * @returns {{ text: string, removed: string[] }} removed: the kinds found (e.g. ['api key', 'email']), never the values
+ */
+export function scrubSecrets(text) {
+  let out = String(text ?? '');
+  const removed = [];
+  for (const [name, re] of SECRET_PATTERNS) {
+    out = out.replace(re, (m, prefix) => {
+      // Number ranges and prices ("1000-2000") are not phone numbers: those have at least 9 digits.
+      if (name === 'phone' && m.replace(/\D/g, '').length < 9) return m;
+      removed.push(name);
+      // "password: hunter22" keeps its label so the sentence still reads.
+      return name === 'secret' && typeof prefix === 'string' ? `${prefix}[removed ${name}]` : `[removed ${name}]`;
+    });
+  }
+  return { text: out, removed: [...new Set(removed)] };
+}

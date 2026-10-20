@@ -3,9 +3,12 @@
 // reacts as soon as the streaming indicator changes (polling is only a fallback cap).
 import { createChainRunner } from '../lib/chainRunner.js';
 import { composeChainStep, mergeChainContext } from '@resync/shared/chains';
-import { query, queryAll, isStreaming, findAlert, messageKey } from '../lib/selectors.js';
+import { query, queryAll, isStreaming, findAlert, messageKey, findComposer } from '../lib/selectors.js';
 import { insertText, submit } from '../lib/composer.js';
 import { markdownOf } from './conversation.js';
+
+/** The message box on any page type (findComposer), with the generic list as a last resort. @param {{ overrides?: Record<string, string[]> }} x */
+const composerOf = (x) => findComposer(x)?.el ?? query('composer', x);
 
 /**
  * @param {() => Record<string, string[]>} getOverrides
@@ -14,7 +17,7 @@ import { markdownOf } from './conversation.js';
 export function realPage(getOverrides) {
   const o = () => ({ overrides: getOverrides() });
   return {
-    hasComposer: () => Boolean(query('composer', o())),
+    hasComposer: () => Boolean(composerOf(o())),
     isStreaming: () => isStreaming(o()),
     replyCount: () => queryAll('assistantMessage', o()).length,
     lastReply: () => {
@@ -27,7 +30,7 @@ export function realPage(getOverrides) {
       return el ? markdownOf(el) : '';
     },
     send(text) {
-      const c = query('composer', o());
+      const c = composerOf(o());
       if (!c) return false;
       insertText(c, text, { replace: true });
       return submit(o());

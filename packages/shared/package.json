@@ -14,6 +14,7 @@
     "./usage": "./src/usage.js",
     "./templates": "./src/templates.js",
     "./rules": "./src/rules.js",
+    "./ledger": "./src/ledger.js",
     "./chains": "./src/chains.js",
     "./sync": "./src/sync.js",
     "./models": "./src/featureModels.js",

@@ -59,7 +59,7 @@ export function passportInstructions(o = {}) {
       `Under "## ${PASSPORT_META}" write exactly these lines (fill in anything in <angle brackets>):`,
       ...metaLines(o.meta ?? {}),
       '',
-      'Be specific and concrete: include the real names, numbers, commands and file paths from the conversation. Under "Decisions made (and why)" give each decision with its reason.',
+      'Be specific and concrete: include the real names, numbers, commands and file paths from the conversation. Under "Decisions made (and why)" write one bullet per decision in the form "- <decision> — because <reason>", and add (assumed) to any decision nobody explicitly confirmed.',
       'Under "Dead ends" only list approaches actually tried and abandoned; otherwise write None. "Next 3 steps" is a numbered list of exactly three actions.',
       'Under "Key files" list every real file path with one line each on why it matters (write "None" if there are no files). Write "None" for any empty section.',
       `Length: at most ${PASSPORT_LIMITS.bulletsPerSection} bullets per section and under ${PASSPORT_LIMITS.words} words in total, not counting Key files, which lists all real files.`,

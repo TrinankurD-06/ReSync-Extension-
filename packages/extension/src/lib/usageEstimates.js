@@ -210,16 +210,16 @@ export function createUsageStore(area) {
     async all() {
       return Object.values(await read());
     },
-    /** Saved running context of a chat. @param {string} chatId @returns {Promise<Range | null>} */
+    /** Saved running context of a chat (plus its turn and attachment counts, for the Chat Health Meter). @param {string} chatId @returns {Promise<(Range & { turns?: number, attachments?: number }) | null>} */
     async chatContext(chatId) {
       if (!chatId) return null;
       return ((await store.get(CHATS_KEY))[CHATS_KEY] ?? {})[chatId] ?? null;
     },
-    /** @param {string} chatId @param {Range} context */
-    async saveChatContext(chatId, context) {
+    /** @param {string} chatId @param {Range} context @param {{ turns?: number, attachments?: number }} [counts] */
+    async saveChatContext(chatId, context, counts = {}) {
       if (!chatId) return;
       const chats = (await store.get(CHATS_KEY))[CHATS_KEY] ?? {};
-      chats[chatId] = { low: Math.round(context.low), high: Math.round(context.high), at: Date.now() };
+      chats[chatId] = { low: Math.round(context.low), high: Math.round(context.high), turns: Math.round(counts.turns ?? 0), attachments: Math.round(counts.attachments ?? 0), at: Date.now() };
       // Keep the 200 most recent chats.
       const keep = Object.entries(chats).sort((a, b) => b[1].at - a[1].at).slice(0, 200);
       await store.set({ [CHATS_KEY]: Object.fromEntries(keep) });

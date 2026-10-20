@@ -43,6 +43,18 @@ export default function Team({ me, onChange }) {
 
       {team.data && (
         <>
+          <section className="card">
+            <h2 style={{ marginTop: 0 }}>Decision Ledger sync</h2>
+            <p className="small muted">
+              Off by default. When allowed, members who turn on "Sync decisions" in ReSync share their team decisions with this server: each decision's text and reason, author, project name and source chat link. API keys, tokens, passwords, emails and phone numbers are removed before upload, and again on the server.
+            </p>
+            <p>Status: <strong>{team.data.team.ledgerSync ? 'allowed' : 'off'}</strong></p>
+            {isOwner && (
+              <button className={team.data.team.ledgerSync ? '' : 'primary'} onClick={() => act(() => patch('/team/settings', { ledgerSync: !team.data.team.ledgerSync }), team.data.team.ledgerSync ? 'Ledger sync turned off.' : 'Ledger sync allowed.')}>
+                {team.data.team.ledgerSync ? 'Turn off ledger sync' : 'Allow ledger sync'}
+              </button>
+            )}
+          </section>
           <h2>{team.data.team.name}: members</h2>
           <table aria-label="Members">
             <thead><tr><th>Name</th><th>Email</th><th>Role</th>{isOwner && <th></th>}</tr></thead>

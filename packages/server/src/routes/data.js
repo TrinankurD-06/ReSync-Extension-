@@ -2,7 +2,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { usageRecordSchema } from '@resync/shared/usage';
-import { User, Team, Token, Prompt, PromptVersion, UsageRecord, QueueReport, SharedItem, Invite, DeviceCode } from '../models/index.js';
+import { User, Team, Token, Prompt, PromptVersion, UsageRecord, QueueReport, SharedItem, Invite, DeviceCode, Decision } from '../models/index.js';
 import { requireUser, requireTeam, SESSION_COOKIE } from '../lib/auth.js';
 import { validate, notFound, forbidden, objectId } from '../lib/http.js';
 
@@ -130,20 +130,21 @@ export function dataRoutes() {
   // ---- Data controls ----
   r.get('/me/export', requireUser, async (req, res) => {
     const uid = req.user._id;
-    const [prompts, usage, reports, shared, tokens, team] = await Promise.all([
+    const [prompts, usage, reports, shared, tokens, team, decisions] = await Promise.all([
       Prompt.find({ $or: [{ ownerId: uid, scope: 'personal' }, ...(req.user.teamId ? [{ teamId: req.user.teamId, scope: 'team' }] : [])] }).lean(),
       UsageRecord.find({ userId: uid }).lean(),
       QueueReport.find({ userId: uid }).lean(),
       SharedItem.find({ userId: uid }).lean(),
       Token.find({ userId: uid, revokedAt: null }, { hash: 0 }).lean(),
       req.user.teamId ? Team.findById(req.user.teamId).lean() : null,
+      Decision.find({ userId: uid }).lean(),
     ]);
     const versions = await PromptVersion.find({ promptId: { $in: prompts.map((p) => p._id) } }).lean();
     res.setHeader('content-disposition', `attachment; filename="resync-export-${new Date().toISOString().slice(0, 10)}.json"`);
     res.json({
       format: 'resync-export', version: 1, exportedAt: new Date().toISOString(),
       user: { id: String(uid), name: req.user.name, email: req.user.email, role: req.user.role, settings: req.user.settings, colours: req.user.colours },
-      team, prompts, promptVersions: versions, usage, queueReports: reports, sharedItems: shared,
+      team, prompts, promptVersions: versions, usage, queueReports: reports, sharedItems: shared, decisions,
       tokens: tokens.map((t) => ({ kind: t.kind, label: t.label, createdAt: t.createdAt, lastUsedAt: t.lastUsedAt })),
     });
   });
@@ -161,6 +162,7 @@ export function dataRoutes() {
       await PromptVersion.deleteMany({ promptId: { $in: teamPrompts.map((p) => p._id) } });
       await Prompt.deleteMany({ teamId: req.user.teamId, scope: 'team' });
       await Invite.deleteMany({ teamId: req.user.teamId });
+      await Decision.deleteMany({ teamId: req.user.teamId });
       await Team.deleteOne({ _id: req.user.teamId });
     }
     const personal = await Prompt.find({ ownerId: uid, scope: 'personal' }, { _id: 1 });
@@ -170,6 +172,7 @@ export function dataRoutes() {
       UsageRecord.deleteMany({ userId: uid }),
       QueueReport.deleteMany({ userId: uid }),
       SharedItem.deleteMany({ userId: uid }),
+      Decision.deleteMany({ userId: uid }),
       Token.deleteMany({ userId: uid }),
       DeviceCode.deleteMany({ userId: uid }),
     ]);

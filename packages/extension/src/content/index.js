@@ -5,30 +5,57 @@ import { applyColours, listSidebarItems } from '../lib/colours.js';
 import { runHealthCheck } from './health.js';
 import { createPicker } from './picker.js';
 import { createLibrary } from '../lib/library.js';
-import { query } from '../lib/selectors.js';
-import { insertText } from '../lib/composer.js';
+import { findComposer, waitForComposer, watchUrl, isChatPage, pageType } from '../lib/selectors.js';
 import { createChainController, realPage, mutationWait } from './chain.js';
-import { readConversation, runInChat, takePendingInsert, scrollToTurn, pageMeta } from './conversation.js';
+import { readConversation, runInChat, takePendingInsertItem, scrollToTurn, pageMeta } from './conversation.js';
 import { createUsageTracker } from './usageTracker.js';
 import { createUsageStore } from '../lib/usageEstimates.js';
+import { deliverText, trackFocus } from './deliver.js';
+import { chatHealthState, chatKeyOf, createSnoozes, shouldNudge } from '../lib/chatHealth.js';
+import { createHandoffs } from '../lib/handoff.js';
+import { renderBadge } from './badge.js';
 
-const composer = () => query('composer', { overrides: settings.selectorOverrides });
+const composer = () => findComposer({ overrides: settings.selectorOverrides })?.el ?? null;
 const chains = createChainController({ getOverrides: () => settings.selectorOverrides });
 
 /** @type {import('../lib/settings.js').Settings} */
 let settings = normaliseSettings(null);
+/** The latest chat stats from the usage tracker (for the Chat Health Meter). */
+let stats = /** @type {{ chatId: string, project: string, tokens: number, turns: number, attachments: number } | null} */ (null);
+/** A handoff whose brief was pasted on this page: linked to the new chat once it gets its URL. */
+let pendingHandoff = /** @type {string | null} */ (null);
+
+/** Current chat health (null on pages that are not a chat yet). */
+async function currentHealth() {
+  if (!stats || pageType(location.pathname) !== 'chat') return null;
+  const chat = chatKeyOf(location.href);
+  const health = chatHealthState({ chat, project: stats.project, tokens: stats.tokens, turns: stats.turns, attachments: stats.attachments }, settings.chatHealth);
+  const snoozed = await createSnoozes(chrome.storage.local).isSnoozed(chat).catch(() => false);
+  return { ...health, chat, snoozed, nudge: shouldNudge(health, snoozed) };
+}
+
+async function paintBadge() {
+  const h = await currentHealth();
+  renderBadge(h, { nudge: h?.nudge, onClick: () => send({ type: 'resync:openPanel' }) });
+}
+
+/** @param {unknown} msg */
+function send(msg) {
+  try {
+    chrome.runtime.sendMessage(msg).catch(() => {});
+  } catch {
+    /* extension context gone (e.g. after an update) */
+  }
+}
 
 /** Message handlers from the side panel, by type. Other features register here. */
 export const handlers = {
   'resync:ping': () => ({ ok: true }),
   'resync:listItems': () => ({ ok: true, items: listSidebarItems({ overrides: settings.selectorOverrides }) }),
   'resync:health': () => ({ ok: true, result: runHealthCheck({ overrides: settings.selectorOverrides }) }),
-  // Insert text (a prompt with its variables already filled) into the message box; the user presses send.
-  'resync:insert': (msg) => {
-    const c = composer();
-    if (!c) return { ok: false, error: "ReSync can't find the message box on this page." };
-    return { ok: true, method: insertText(c, String(msg.text ?? ''), { replace: Boolean(msg.replace) }) };
-  },
+  // Insert text (a prompt with its variables filled, or a ledger decision) into the message box; the user presses send.
+  // Works on chat, new-chat and project home pages; on failure the page shows Retry and the text is copied.
+  'resync:insert': (msg) => deliverText(String(msg.text ?? ''), { replace: Boolean(msg.replace), overrides: settings.selectorOverrides, timeoutMs: 3000 }),
   'resync:chainStart': (msg) => chains.start(msg),
   'resync:chainControl': (msg) => chains.control(msg),
   'resync:chainState': () => chains.state(),
@@ -45,20 +72,38 @@ export const handlers = {
       mw.disconnect();
     }
   },
+  // Chat Health Meter for the side panel.
+  'resync:chatHealth': async () => ({ ok: true, health: await currentHealth(), meta: pageMeta({ overrides: settings.selectorOverrides }), page: pageType(location.pathname) }),
+  'resync:repaintBadge': async () => {
+    await paintBadge();
+    return { ok: true };
+  },
 };
 
-/** After "New chat with passport": put the saved text into the new chat's message box (the user sends it). */
+/** After a handoff or "New chat with passport": put the saved text into this page's message box. */
 async function deliverPendingInsert() {
-  const text = await takePendingInsert();
-  if (!text) return;
-  for (let i = 0; i < 30; i++) {
-    const c = composer();
-    if (c) {
-      insertText(c, text, { replace: true });
-      return;
-    }
-    await new Promise((r) => setTimeout(r, 500));
+  const item = await takePendingInsertItem();
+  if (!item) return;
+  const r = await deliverText(item.text, { replace: true, autoSend: item.autoSend, overrides: settings.selectorOverrides, timeoutMs: 15_000 });
+  if (item.handoffId) {
+    pendingHandoff = item.handoffId;
+    send({ type: 'resync:handoffDelivered', handoffId: item.handoffId, ok: r.ok, page: pageType(location.pathname) });
+    linkHandoff();
   }
+}
+
+/** Once the new chat has an address (after its first message), link it to the chat it was handed off from. */
+async function linkHandoff() {
+  if (!pendingHandoff || pageType(location.pathname) !== 'chat') return;
+  const id = pendingHandoff;
+  pendingHandoff = null;
+  await createHandoffs(chrome.storage.local).linkNewChat(id, location.href).catch(() => {});
+}
+
+/** Selector health, after giving the composer time to mount (it renders late after in-app navigation). */
+async function checkHealth() {
+  if (isChatPage(location.pathname)) await waitForComposer({ overrides: settings.selectorOverrides, timeoutMs: 8000, pathname: () => location.pathname });
+  runHealthCheck({ overrides: settings.selectorOverrides });
 }
 
 function repaint() {
@@ -81,24 +126,43 @@ async function start() {
     /* extension context invalidated */
   }
   repaint();
-  runHealthCheck({ overrides: settings.selectorOverrides });
+  checkHealth();
+  trackFocus();
   const library = createLibrary(chrome.storage.local);
   createPicker({ getPrompts: () => library.list(), getComposer: composer }).attach();
   deliverPendingInsert();
 
   const usage = createUsageStore(chrome.storage.local);
-  const tracker = createUsageTracker({ add: (e) => usage.add(e), getOverrides: () => settings.selectorOverrides, getModel: () => settings.usage, memory: usage });
+  let lastStats = '';
+  const tracker = createUsageTracker({
+    add: (e) => usage.add(e),
+    getOverrides: () => settings.selectorOverrides,
+    getModel: () => settings.usage,
+    memory: usage,
+    // Decision Ledger: each new message is checked against the team's decisions (in the background worker).
+    onMessage: (m) => send({ type: 'resync:ledgerCheck', role: m.role, text: m.text.slice(0, 8000), chat: chatKeyOf(location.href), project: pageMeta({ overrides: settings.selectorOverrides }).project }),
+    onStats: (s) => {
+      stats = s;
+      const key = JSON.stringify(s);
+      if (key === lastStats) return;
+      lastStats = key;
+      paintBadge();
+    },
+  });
   tracker.baseline();
 
-  // claude.ai is a single-page app: watch for re-renders and URL changes.
-  let lastPath = location.pathname;
+  // claude.ai is a single-page app: URL changes (pushState via the main-world nav hook, back/forward, or seen on
+  // re-render) mean a different page; the composer may mount later, so detection waits for it.
+  watchUrl(() => {
+    stats = null;
+    renderBadge(null);
+    checkHealth();
+    tracker.baseline(); // a different chat's history is not new usage
+    linkHandoff();
+    deliverPendingInsert();
+  });
   const onMutate = debounce(() => {
     repaint();
-    if (location.pathname !== lastPath) {
-      lastPath = location.pathname;
-      runHealthCheck({ overrides: settings.selectorOverrides });
-      tracker.baseline(); // a different chat's history is not new usage
-    }
     tracker.scan().catch(() => {});
   }, 300);
   new MutationObserver(onMutate).observe(document.body, { childList: true, subtree: true });
@@ -107,6 +171,7 @@ async function start() {
     if (area === 'local' && changes[SETTINGS_KEY]) {
       settings = normaliseSettings(changes[SETTINGS_KEY].newValue);
       repaint();
+      paintBadge();
     }
   });
 

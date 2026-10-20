@@ -1,5 +1,7 @@
 // Extension <-> team server sync (optional; nothing happens without a server URL and sign-in).
 // Syncs prompts, project colours and usage NUMBERS (per the privacy toggles). Never API keys or conversations.
+// Decision Ledger text syncs only when the user turned it on (off by default) AND the team owner allowed it; each
+// decision is scrubbed of secrets, emails and phone numbers first.
 //
 // Prompt merge rules:
 //  - prompts that came from the server are tracked in SYNCED_KEY; the server copy wins on pull, and if one
@@ -10,9 +12,12 @@ import { createSyncClient } from '@resync/shared/sync';
 import { jsonToLibrary } from '@resync/shared/prompts';
 import { promptId, LIBRARY_KEY, DIRTY_KEY, DELETED_KEY, SYNCED_KEY } from './library.js';
 import { toUsageRecords } from './usageEstimates.js';
+import { scrubDecision } from '@resync/shared/ledger';
 
 export const TOKEN_KEY = 'resync.serverToken';
 export const STATUS_KEY = 'resync.syncStatus';
+/** The signed-in user's display name and team (from the last sync), used as the author of new decisions. */
+export const ME_KEY = 'resync.me';
 
 /**
  * @param {{
@@ -20,6 +25,7 @@ export const STATUS_KEY = 'resync.syncStatus';
  *   settings: { get(): Promise<import('./settings.js').Settings>, update(fn: (s: any) => void): Promise<any> },
  *   library: ReturnType<typeof import('./library.js').createLibrary>,
  *   usage: ReturnType<typeof import('./usageEstimates.js').createUsageStore>,
+ *   ledger?: ReturnType<typeof import('./ledger.js').createLedger>,
  *   fetch?: typeof fetch,
  * }} deps
  */
@@ -66,9 +72,10 @@ export function createExtensionSync(deps) {
       const token = await getToken();
       if (!s.serverUrl || !token) return { skipped: true, reason: s.serverUrl ? 'not signed in' : 'local only' };
       const c = await client();
-      const summary = { at: Date.now(), pushed: 0, deleted: 0, pulled: 0, removedLocally: 0, colours: 'skipped', usage: 0 };
+      const summary = { at: Date.now(), pushed: 0, deleted: 0, pulled: 0, removedLocally: 0, colours: 'skipped', usage: 0, ledger: 'off', ledgerPushed: 0, ledgerPulled: 0 };
       try {
         const me = await c.me();
+        await area.set({ [ME_KEY]: { name: me.name, team: me.team?.name ?? '' } });
 
         if (s.privacy.syncPrompts) {
           // 1) Push local edits.
@@ -124,6 +131,21 @@ export function createExtensionSync(deps) {
           const rows = await deps.usage.all();
           if (rows.length) summary.usage = (await c.uploadUsage(toUsageRecords(rows, me.name))).accepted;
         }
+        // 6) Decision Ledger (text): only with the user's opt-in and the team's.
+        if (s.privacy.syncLedger && deps.ledger) {
+          if (!me.team) summary.ledger = 'no team';
+          else if (!me.team.ledgerSync) summary.ledger = 'off for your team (the owner can allow it in the dashboard)';
+          else {
+            const ids = await deps.ledger.dirty();
+            const want = new Set(ids);
+            const scrubbed = (await deps.ledger.list()).filter((d) => want.has(d.id)).map((d) => scrubDecision(d).decision);
+            for (let i = 0; i < scrubbed.length; i += 500) await c.putLedger(scrubbed.slice(i, i + 500));
+            await deps.ledger.clearDirty(ids);
+            summary.ledgerPushed = scrubbed.length;
+            summary.ledgerPulled = await deps.ledger.mergeRemote((await c.getLedger()).decisions ?? []);
+            summary.ledger = 'synced';
+          }
+        }
         await area.set({ [STATUS_KEY]: { ok: true, ...summary } });
         return { ok: true, ...summary };
       } catch (e) {
@@ -132,6 +154,11 @@ export function createExtensionSync(deps) {
         await area.set({ [STATUS_KEY]: status });
         return status;
       }
+    },
+
+    /** Team owner: allow or stop Decision Ledger sync for the whole team. @param {boolean} on */
+    async setTeamLedgerSync(on) {
+      return (await client()).setTeamSettings({ ledgerSync: on });
     },
 
     /** Share a passport/summary/tree with the team (explicit, per item). */

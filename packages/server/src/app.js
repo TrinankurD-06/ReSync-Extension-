@@ -16,6 +16,7 @@ import { meRoutes } from './routes/me.js';
 import { teamRoutes } from './routes/teams.js';
 import { promptRoutes } from './routes/prompts.js';
 import { dataRoutes } from './routes/data.js';
+import { ledgerRoutes } from './routes/ledger.js';
 
 /**
  * @param {{ config: import('./config.js').ServerConfig, logger: import('pino').Logger, fetch?: typeof fetch, rateLimits?: boolean }} o
@@ -56,6 +57,7 @@ export function createApp(o) {
   api.use(teamRoutes(cfg));
   api.use(promptRoutes());
   api.use(dataRoutes());
+  api.use(ledgerRoutes());
   api.use((_req, _res, next) => next(notFound('No such API route.')));
   app.use('/api/v1', api);
 
