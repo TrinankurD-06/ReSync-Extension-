@@ -14,7 +14,7 @@
 |---|---|
 | **Claude Code plugin** (`/resync:*`) | Saved prompts as slash commands (`/resync:dev-code-review`), `/resync:passport` handoff briefs, `/resync:resume`, `/resync:tree` (JSON + Mermaid mindmap), `/resync:summary`. A reminder to save a passport after auto-compaction. A statusline with today's usage. |
 | **`resync` CLI** | **Limit-Aware Work Queue:** queue coding tasks that run headless overnight, each in its own git worktree and `resync/<task-id>` branch. When a usage limit hits, the task waits for the reset and then retries. Also `resync usage` tables, API-mode passports, keys in the OS keychain, and team sync. |
-| **Chrome extension** (claude.ai) | Project colours, a prompt library with a `;;` quick picker and `{{variables}}` forms, multi-step chains that wait for each reply (with timers, pause and skip), passport, topic tree and summary (read aloud), and a 7-day usage estimate chart. |
+| **Chrome extension** (claude.ai) | Project colours, a prompt library with a `;;` quick picker and `{{variables}}` forms, multi-step chains that wait for each reply (with timers, pause and skip), passport, topic tree and summary (read aloud), a 7-day usage estimate chart, a **Team Decision Ledger** ("your team's AI remembers what you decided, and why": decisions from passports, a banner when a message goes against one, supersede history), and a **Chat Health Meter** with one-click handoff to a fresh chat in the same project. |
 | **Team server + dashboard** (optional) | Invite-only teams, shared team prompts with version history, usage per person, project and day, overnight queue reports, and shared handoffs. Self-host it with one `docker compose up`. |
 | **Provider layer** | One interface for Anthropic, OpenAI, Gemini, OpenRouter and any OpenAI-compatible server (Ollama, LM Studio). Route each feature to its own model. See [docs/PROVIDERS.md](docs/PROVIDERS.md). |
 
@@ -66,7 +66,7 @@ Teammates: follow [docs/SETUP.md](docs/SETUP.md).
 
 ## Privacy in one paragraph
 
-API keys stay on your device: in the OS keychain (CLI) or encrypted with your passphrase (extension). They are never sent to the ReSync server. Conversations stay local. Only prompt libraries, settings, colours and usage **numbers** sync, and only if you use a server. A passport or summary reaches your team only when you click **Share**. In API mode, the conversation text goes to the provider you chose, and ReSync tells you so before the first send. There is no telemetry. Details: [docs/SECURITY.md](docs/SECURITY.md).
+API keys stay on your device: in the OS keychain (CLI) or encrypted with your passphrase (extension). They are never sent to the ReSync server. Conversations stay local. Only prompt libraries, settings, colours and usage **numbers** sync, and only if you use a server. A passport or summary reaches your team only when you click **Share**. Decision Ledger text syncs only if your team owner allows it and you turn it on (both off by default), with secrets, emails and phone numbers removed first. In API mode, the conversation text goes to the provider you chose, and ReSync tells you so before the first send. There is no telemetry. Details: [docs/SECURITY.md](docs/SECURITY.md).
 
 ## Development
 

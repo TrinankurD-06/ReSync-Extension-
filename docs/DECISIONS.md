@@ -70,3 +70,22 @@ The spec's `resync/` repo root is this project folder (`Extension/`). The layout
 
 ## 2026-10-17: Line endings
 `.gitattributes` forces LF. The hook and statusline scripts run under Git Bash on Windows, and CRLF breaks shebang scripts.
+
+## 2026-10-21: Composer detection per page type
+The old single list picked the first match anywhere. Now the page type (from the URL) selects an ordered list, and among the first selector's matches ReSync takes the visible one in `main`, never inside navigation, dialogs, or a project page's Instructions / Memory / Context panels (judged by the panel's heading or aria-label). User overrides of `composer` still go first. The health check waits for the composer (up to 8 s, and again if the one it found was the previous page's) before reporting it missing. Fixtures are reconstructed (nobody could sign in from the build machine); a capture script is provided to replace them.
+
+## 2026-10-21: "Sent" means the editor took it
+After inserting, ReSync requires the text to be present and the Send button (when there is one) to be enabled within about a second. A disabled Send button means only the DOM changed, which claude.ai would ignore, so ReSync shows the Retry banner and copies the text instead of claiming success.
+
+## 2026-10-21: Decision Ledger choices
+- The model is used only when "Decision Ledger checks" is routed to a provider in Feature to model (API mode, with a one-time consent). "In-chat" makes no sense here (ReSync must never post in the chat), so that option is labelled "Local matching only".
+- The two ledger prompts (conflict check, same-decision check) do **not** append the shared rules: they are JSON classifiers over decision text, and rules like "mark anything inferred as (assumed)" would corrupt the JSON. Recorded as an intentional exception to spec 3.4.
+- Thresholds: merge at Jaccard >= 0.6 over key terms; 0.35 to 0.6 is borderline (model-confirmed only with a provider). Prefilter candidates share two key terms, or one distinctive term (5+ characters) that is a tag of a short decision.
+- Only conflicts are shown when the model is used; "related" results are dropped, to keep banners rare. Without a model, at most two candidates show as "Related team decision".
+- Rate limit: one model check per chat per 20 s, 12 per hour (local checks are free and unlimited). Dismissals: hidden in that chat; muted everywhere after dismissals in 3 different chats.
+- Author: Settings > Decision Ledger name, else the team-server name from the last sync, else "You".
+- Sync merge: last write wins by `updatedAt`; local changes not yet pushed always win. Deleting a decision is local only (not propagated to the team server yet).
+- Team switch lives on the Team document (`ledgerSync`), so one owner decision covers everyone; each user still has their own switch.
+
+## 2026-10-21: Chat health measures
+The meter reads the chat's re-read context (high end of the estimate), turns and attachments, and uses the worst of the three. Defaults (60k / 120k tokens, 40 / 80 turns, 8 / 15 attachments) are rules of thumb that don't depend on a model's window; all six are settings. The first message of a chat started on a project home or new-chat page now continues the same running estimate (it used to be reset when the URL changed to `/chat/<id>`, which also hid it from the ledger check).

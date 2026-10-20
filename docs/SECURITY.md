@@ -21,6 +21,8 @@ If you forget the extension passphrase, Settings > Reset keys deletes the encryp
 | Prompt libraries, project colours, non-secret settings | Only to **your team server**, only when you are signed in, and each can be turned off in the extension (Settings > Privacy). |
 | Usage | **Numbers only** (tokens, cost estimates, message counts, dates, project names) to your team server when signed in. The shared schema rejects any non-number field, on the client and on the server. |
 | Passports, summaries, topic trees | Only when you click **Share** (extension) or run `resync share <file>`, one item at a time. |
+| Decision Ledger (decision text and reasons, author, project name, source chat link, status, links between decisions) | **Off by default; this is the one place conversation-derived text syncs without a per-item click (changed 2026-10-21).** It goes to your team server only when **both** your team owner allows ledger sync (dashboard Team page) **and** you turn on "Sync decisions" (extension Settings > Decision Ledger). Before upload ReSync removes API keys, tokens, `password: ...`-style secrets, emails and phone numbers (`scrubSecrets`), and the server removes them again. Without a server, or with either switch off, the ledger stays in your browser. |
+| New messages, for the Decision Ledger check | **No**, by default: they are matched against your decisions locally. Only if you set "Decision Ledger checks" to API mode (it asks once) are a message and the decisions it might conflict with sent to **your** provider, and only when the local match finds candidates (rate-limited per chat). |
 | Queue report summaries | Only if you turn on `queue.uploadReports`. |
 | Telemetry or analytics | **Never.** ReSync has none. The only requests it makes are to the providers you configure and to the team server you choose. |
 
@@ -44,6 +46,8 @@ If you forget the extension passphrase, Settings > Reset keys deletes the encryp
 ## The extension and claude.ai
 
 - The content script only reads and fills the claude.ai page. It never makes provider calls; API mode runs in the background service worker.
+- A second, tiny script (`nav-hook.js`) runs in the page's own JavaScript world so ReSync notices in-app navigation (`history.pushState` / `replaceState`). It only fires a `resync:navigate` event on the page; it reads nothing and sends nothing.
+- ReSync never sends a message for you unless you ask: the handoff pastes the brief and waits for you to press Send (unless you turn on auto-send), and the ledger banner never writes into the chat on its own.
 - Host permission for each AI provider is requested only when you add that provider (optional permissions), never up front.
 - The extension is not affiliated with Anthropic, and claude.ai can change at any time. When an expected element is missing, ReSync shows a banner instead of acting blindly.
 
