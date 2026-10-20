@@ -4,6 +4,8 @@ import { test, expect } from '@playwright/test';
 import { mkdtempSync, existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import './seedsHook.mjs'; // lets the extension's library.js load outside Vite
+
 
 const BASE = 'http://127.0.0.1:4319';
 
@@ -35,7 +37,7 @@ test('team prompt and per-user usage across the CLI, the extension and the dashb
 
   const alice = await (await browser.newContext()).newPage();
   const bob = await (await browser.newContext()).newPage();
-  await devSignIn(alice, 'alice@example.com');
+  await devSignIn(alice, 'alice@sync.example');
   await alice.getByRole('link', { name: 'Team' }).click();
   await alice.getByLabel('Team name').fill('Acme');
   await alice.getByRole('button', { name: 'Create team' }).click();
@@ -79,7 +81,7 @@ test('team prompt and per-user usage across the CLI, the extension and the dashb
   expect(existsSync(path.join(process.env.RESYNC_HOME, 'claude-plugin', 'resync', 'commands', 'team-ops-release-notes.md'))).toBe(true);
 
   // ---- Bob: joins, then the real extension sync engine ----
-  await devSignIn(bob, 'bob@example.com');
+  await devSignIn(bob, 'bob@sync.example');
   await bob.goto(new URL(invite).pathname);
   await bob.getByRole('button', { name: 'Join Acme' }).click();
   await expect(bob.getByRole('heading', { name: 'Acme: members' })).toBeVisible();
@@ -98,7 +100,7 @@ test('team prompt and per-user usage across the CLI, the extension and the dashb
   const start = await ext.startLogin();
   await approve(bob, start.userCode);
   await ext.finishLogin(start, { sleep: async () => {} });
-  await usage.add({ project: 'Launch', messages: 7, tokens: 2800 });
+  await usage.add({ project: 'Launch', messages: 7, typedTokens: 2800 });
   const r = await ext.syncNow();
   expect(r).toMatchObject({ ok: true, pulled: 1, usage: 1 });
   expect((await library.list()).map((p) => p.title)).toEqual(['Release notes']); // the shared team prompt
