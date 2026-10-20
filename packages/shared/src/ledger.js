@@ -205,8 +205,9 @@ export function mergeDecisions(existing, incoming, now = new Date()) {
 // ---- Local prefilter (before any model call) ----
 
 /**
- * Decisions that might be related to a new message: shared key terms (two or more, or one that is a tag of a
- * short decision), in the same project (or either side has none). Superseded and muted decisions are skipped.
+ * Decisions that might be related to a new message: shared key terms (two or more, or one distinctive term of 5+
+ * characters that is a tag of a short decision, like "Stripe" in "Use Stripe"), in the same project (or either side
+ * has none). Superseded and muted decisions are skipped.
  * No candidates means no model call.
  * @param {string} text
  * @param {Decision[]} decisions
@@ -225,7 +226,7 @@ export function prefilter(text, decisions, o = {}) {
     const dTerms = keyTerms(`${d.text} ${d.tags.join(' ')}`);
     const shared = [...dTerms].filter((t) => terms.has(t));
     const tagHit = shared.some((t) => d.tags.includes(t));
-    if (shared.length >= 2 || (shared.length === 1 && tagHit && keyTerms(d.text).size <= 3)) {
+    if (shared.length >= 2 || (shared.length === 1 && tagHit && shared[0].length >= 5 && keyTerms(d.text).size <= 3)) {
       out.push({ decision: d, shared, score: shared.length + (tagHit ? 0.5 : 0) + (project && d.project === project ? 0.5 : 0) });
     }
   }

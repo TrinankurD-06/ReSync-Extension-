@@ -1,0 +1,26 @@
+<!doctype html>
+<!-- claude.ai EXISTING CHAT page inside a project (/chat/<id>, project link in the header). RECONSTRUCTED, not
+     captured from the live site: replace with a real capture (see README.md). The element ReSync should pick is
+     marked data-expect="composer". -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Pricing chat - Claude</title>
+</head>
+<body>
+<nav aria-label="Sidebar">
+  <a href="/new">New chat</a>
+  <a href="/project/p1">Launch site</a>
+  <a href="/chat/c1">Pricing chat</a>
+</nav>
+<main>
+  <header><a href="/project/p1">Launch site</a> / Pricing chat</header>
+  <div data-test-render-count="1"><div data-testid="user-message">What should Pro cost?</div></div>
+  <div data-test-render-count="1"><div class="font-claude-response" data-is-streaming="false"><p>About 20 dollars a month.</p></div></div>
+  <fieldset>
+    <div contenteditable="true" translate="no" class="ProseMirror" role="textbox" aria-label="Write your prompt to Claude" data-placeholder="Reply to Claude..." data-expect="composer"><p class="is-empty"><br /></p></div>
+    <button type="button" aria-label="Send message" disabled>Send</button>
+  </fieldset>
+</main>
+</body>
+</html>

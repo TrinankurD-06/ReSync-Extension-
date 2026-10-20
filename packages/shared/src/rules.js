@@ -45,7 +45,8 @@ export const SECRET_PATTERNS = /** @type {const} */ ([
   ['token', /\b(?:eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}|Bearer\s+[A-Za-z0-9._~+/-]{16,}=*)/g],
   ['secret', /\b((?:password|passwd|secret|api[_-]?key|access[_-]?token|token)\s*[:=]\s*)["']?[^\s"',;]{6,}["']?/gi],
   ['email', /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g],
-  ['phone', /(?<![\w.])(?:\+\d{1,3}[\s.-]?)?(?:\(\d{2,4}\)[\s.-]?)?\d{3,4}[\s.-]\d{3,4}(?:[\s.-]\d{2,4})?(?![\w.])/g],
+  // Lookarounds: not part of a word or a version number ("24.10.0"), but a sentence may end right after it.
+  ['phone', /(?<!\w|\d\.)(?:\+\d{1,3}[\s.-]?)?(?:\(\d{2,4}\)[\s.-]?)?(?:\d{2,5}[\s.-]\d{2,5}(?:[\s.-]\d{2,5}){0,2}|\d{10,13})(?!\w|\.\d)/g],
 ]);
 
 /**

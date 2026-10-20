@@ -1,0 +1,65 @@
+<!doctype html>
+<!-- claude.ai PROJECT HOME page (/project/<id>). RECONSTRUCTED from the page's described layout, not captured from
+     the live site: replace with a real capture (see README.md). The element ReSync should pick is marked
+     data-expect="composer" (keep that marker when you replace the file).
+     What makes this page hard:
+       - a hidden duplicate composer (another layout) earlier in the DOM;
+       - the Instructions and Memory panels contain editors of their own, also ProseMirror contenteditables;
+       - the composer card has no data-testid and no fieldset;
+       - the composer renders after navigation (tests add it late to check the wait). -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Launch site - Claude</title>
+<style>
+  .mobile-only { display: none; }
+</style>
+</head>
+<body>
+<nav aria-label="Sidebar">
+  <a href="/new">New chat</a>
+  <a href="/projects">Projects</a>
+  <a href="/project/p1">Launch site</a>
+  <a href="/chat/c1">Pricing chat</a>
+</nav>
+<div class="mobile-only">
+  <div contenteditable="true" class="ProseMirror" role="textbox" aria-label="Write your prompt to Claude"><p></p></div>
+</div>
+<main>
+  <header><h1>Launch site</h1><p>Marketing site for the October launch</p></header>
+  <div class="project-columns">
+    <div class="project-main">
+      <div class="composer-card">
+        <div contenteditable="true" translate="no" class="ProseMirror" role="textbox" aria-label="Write your prompt to Claude" aria-multiline="true" data-placeholder="How can I help you today?" data-expect="composer"><p class="is-empty is-editor-empty" data-placeholder="How can I help you today?"><br /></p></div>
+        <div class="composer-toolbar">
+          <button type="button" aria-label="Add files">+</button>
+          <button type="button" aria-label="Send message" disabled>Send</button>
+        </div>
+      </div>
+      <section aria-label="Project chats">
+        <h2>Chats</h2>
+        <ul>
+          <li><a href="/chat/c1">Pricing chat</a> <span>Last message 2 days ago</span></li>
+          <li><a href="/chat/c2">Hiring plan</a> <span>Last message 5 days ago</span></li>
+        </ul>
+      </section>
+    </div>
+    <div class="project-side">
+      <section>
+        <h2>Instructions</h2>
+        <div contenteditable="true" class="ProseMirror" role="textbox" aria-label="Edit project instructions"><p>Write in a friendly tone.</p></div>
+      </section>
+      <section>
+        <h2>Memory</h2>
+        <div contenteditable="true" class="ProseMirror"><p>Launch date is in October.</p></div>
+      </section>
+      <section>
+        <h2>Context</h2>
+        <p>12% of project capacity used</p>
+        <ul><li>brand-guide.pdf</li><li>pricing.md</li></ul>
+      </section>
+    </div>
+  </div>
+</main>
+</body>
+</html>
