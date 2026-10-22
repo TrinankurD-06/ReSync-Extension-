@@ -18,7 +18,7 @@ describe('token estimator', () => {
   it('is language-aware: ~4 chars/token for English prose, ~3 for code and JSON, ~2 for non-Latin scripts', () => {
     expect(estimateTokens('a'.repeat(120))).toBe(30); // prose: 120 / 4
     expect(estimateTokens('```\n' + 'x'.repeat(112) + '\n```')).toBe(40); // fenced code: 120 chars / 3
-    expect(estimateTokens('{"name": "resync", "id": 12}')).toBe(9); // JSON line: 27 / 3
+    expect(estimateTokens('{"name": "alpha", "id": 12}')).toBe(9); // JSON line: 27 / 3
     expect(estimateTokens('日本語のテキスト')).toBe(4); // 8 non-Latin chars / 2
     expect(estimateTokens('Привет мир')).toBe(5); // 9 Cyrillic letters / 2 + 1 space / 4 -> ceil(4.75)
     expect(estimateTokens('## Heading\n- a bullet point here')).toBe(Math.ceil(32 / 4)); // Markdown still prose

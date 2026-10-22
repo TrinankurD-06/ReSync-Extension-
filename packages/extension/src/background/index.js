@@ -8,6 +8,7 @@ import { createLibrary } from '../lib/library.js';
 import { createUsageStore } from '../lib/usageEstimates.js';
 import { createLedger, checkMessage } from '../lib/ledger.js';
 import { ledgerAlertKey } from '../lib/ledgerAlerts.js';
+import { migrateRenamedKeys } from '../lib/migrate.js';
 
 const settings = createSettingsStore();
 const ai = createAiService({ settings, vault: createVault() });
@@ -34,6 +35,8 @@ async function ledgerCheck(msg, tabId) {
 
 // Clicking the toolbar icon opens the side panel (chrome.sidePanel, Chrome 114+, verified).
 chrome.runtime.onInstalled.addListener(() => {
+  // Data saved before the rename to ReSync moves to the new keys (a no-op on fresh installs).
+  migrateRenamedKeys().catch(() => {});
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
   // Background sync every 30 minutes (a no-op when local-only or signed out).
   chrome.alarms.create('resync-sync', { periodInMinutes: 30 });
