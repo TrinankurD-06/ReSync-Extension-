@@ -2,11 +2,6 @@
 
 Choices made while building ReSync, newest first. Each records what was decided and why. Facts behind them are in `docs/VERIFIED.md`.
 
-## 2026-10-23: Renamed from Relay to ReSync
-- **Requested by the project owner**. Everything was renamed, code included: the `resync` CLI, `/resync:*` plugin commands, `@resync/*` packages, `~/.resync` and `.resync/` folders, `RESYNC_*` env vars, `resync/<task-id>` and queue branches.
-- The extension moves data saved under the old `relay.*` storage keys to `resync.*` on install or update (`src/lib/migrate.js`), so a loaded extension keeps its settings, prompts, colours, vault and ledger. The CLI does not migrate automatically: `~/.relay` is referenced by an installed statusline, so moving it is left to the user (see PROGRESS).
-- Entries below this one were written before the rename and now use the new names.
-
 ## 2026-10-17: Spec change: ReSync works with no API keys
 - **Change (requested by the project owner):** spec section 1 gained principle 6: "ReSync must work fully with no API keys. In-chat mode is the default for every AI feature; API mode is optional and off until the user adds a provider."
 - **Change:** in section 8 (definition of done), the item "`resync keys test` passes for Anthropic and for an OpenAI-compatible local model, and `resync passport --api` works" was replaced. The new item: the Anthropic, OpenAI, Gemini and OpenRouter adapters pass mocked-HTTP tests, and a real end-to-end test passes with a local model through the OpenAI-compatible adapter (Ollama). If Ollama isn't installed, that one check is marked "needs Ollama" and the build continues.
