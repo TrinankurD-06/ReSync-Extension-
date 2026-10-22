@@ -30,7 +30,7 @@ Local tool versions at verification time: Claude Code 2.1.301, Node 24.10.0, npm
 - Provider origins go in `optional_host_permissions`, requested on a user gesture when a provider is added. All provider fetches happen in the service worker.
 - Keychain: `@napi-rs/keyring` 2.1.1. Hosting: MongoDB Atlas M0 + Render free (see DECISIONS.md). OAuth: GitHub + Google endpoints as recorded below.
 
-**claude.ai page structure: NOT verified.** claude.ai needs a signed-in browser, and its markup is undocumented and changes without notice. The selectors in `packages/extension/src/lib/selectors.js` are best-effort fallback lists. Users can override them in Settings, and a health-check banner appears when a required element is missing. They must be checked by hand in a signed-in Chrome during the final extension check (PROGRESS.md, definition of done).
+**claude.ai page structure: NOT verified.** claude.ai needs a signed-in browser, and its markup is undocumented and changes without notice. The selectors in `packages/extension/src/lib/selectors.js` are best-effort fallback lists. Users can override them in Settings, and a health-check banner appears when a required element is missing. They must be checked by hand in a signed-in Chrome during the final extension check before release.
 
 ---
 

@@ -1,6 +1,6 @@
 {
   "name": "resync-team",
-  "description": "ReSync for your team: install with /plugin marketplace add <this repo>, then /plugin install resync@resync-team",
+  "description": "ReSync for your team: install with /plugin marketplace add TrinankurD-06/ReSync-Extension-, then /plugin install resync@resync-team",
   "owner": { "name": "ReSync contributors" },
   "plugins": [
     {

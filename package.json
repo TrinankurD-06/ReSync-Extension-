@@ -4,6 +4,14 @@
   "version": "0.1.0",
   "description": "ReSync: saved prompts, Context Passport, usage tracking and a limit-aware work queue for Claude Code and claude.ai, with bring-your-own AI providers.",
   "license": "MIT",
+  "homepage": "https://github.com/TrinankurD-06/ReSync-Extension-#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TrinankurD-06/ReSync-Extension-.git"
+  },
+  "bugs": {
+    "url": "https://github.com/TrinankurD-06/ReSync-Extension-/issues"
+  },
   "type": "module",
   "workspaces": [
     "packages/shared",

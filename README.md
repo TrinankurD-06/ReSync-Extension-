@@ -23,7 +23,7 @@
 You need **Node.js 20+** and **git**. Claude Code is needed for the plugin and the queue.
 
 ```sh
-git clone <this repo> resync && cd resync
+git clone https://github.com/TrinankurD-06/ReSync-Extension-.git resync && cd resync
 npm install
 npm link -w @resync/cli            # puts `resync` on your PATH
 resync --help

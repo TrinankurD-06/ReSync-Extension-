@@ -4,5 +4,7 @@
   "description": "Saved prompts as slash commands, Context Passport, topic tree, summaries and usage tracking. Works with no API keys (in-chat mode).",
   "author": { "name": "ReSync contributors" },
   "license": "MIT",
+  "homepage": "https://github.com/TrinankurD-06/ReSync-Extension-",
+  "repository": "https://github.com/TrinankurD-06/ReSync-Extension-",
   "keywords": ["prompts", "handoff", "passport", "usage", "queue"]
 }
